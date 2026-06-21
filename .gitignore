@@ -15,3 +15,7 @@ coverage/
 .nightcrow/logs/
 .omc/
 tmp/
+
+# persistent app data (users, history, artifacts, session secret)
+data/
+apps/api/data/

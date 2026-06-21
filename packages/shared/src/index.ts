@@ -115,3 +115,104 @@ export type SseEvent =
 
 export const SSE_EVENT_NAMES = ["status", "log", "done", "error"] as const;
 export type SseEventName = (typeof SSE_EVENT_NAMES)[number];
+
+/* ------------------------------------------------------------------ *
+ * Auth & users
+ * ------------------------------------------------------------------ */
+
+export type Role = "admin" | "user";
+/** Regular users start "pending" and must be activated by an admin. */
+export type UserStatus = "active" | "pending";
+/** Admin authenticates with a password; everyone else with a passkey. */
+export type AuthMethod = "password" | "passkey";
+
+/** User shape safe to expose to the client (no secrets). */
+export interface PublicUser {
+  id: string;
+  displayName: string;
+  role: Role;
+  status: UserStatus;
+  authMethod: AuthMethod;
+  createdAt: number;
+}
+
+export interface AuthSession {
+  token: string;
+  user: PublicUser;
+}
+
+/** GET /api/auth/me — current session, or 401. */
+export interface MeResponse {
+  user: PublicUser;
+}
+
+/** POST /api/auth/login (admin id/password). */
+export interface AdminLoginRequest {
+  username: string;
+  password: string;
+}
+
+/** POST /api/admin/password (admin only). */
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+/**
+ * WebAuthn payloads are passed through opaquely to keep this package
+ * dependency-free; the server validates them with @simplewebauthn/server.
+ */
+export type WebAuthnJSON = Record<string, unknown>;
+
+export interface PasskeyRegisterStartRequest {
+  username: string;
+  displayName?: string;
+}
+export interface PasskeyRegisterStartResponse {
+  /** Opaque registration ceremony id echoed back on finish. */
+  flowId: string;
+  options: WebAuthnJSON;
+}
+export interface PasskeyRegisterFinishRequest {
+  flowId: string;
+  response: WebAuthnJSON;
+}
+
+export interface PasskeyLoginStartResponse {
+  flowId: string;
+  options: WebAuthnJSON;
+}
+export interface PasskeyLoginFinishRequest {
+  flowId: string;
+  response: WebAuthnJSON;
+}
+
+/** Admin view of a user (GET /api/admin/users). */
+export interface AdminUser extends PublicUser {
+  /** Number of registered passkeys (for passkey users). */
+  passkeyCount: number;
+}
+export interface AdminUsersResponse {
+  users: AdminUser[];
+}
+
+/* ------------------------------------------------------------------ *
+ * History
+ * ------------------------------------------------------------------ */
+
+/** A persisted, re-downloadable past generation, owned by its creator. */
+export interface HistoryItem {
+  id: string;
+  ownerId: string;
+  prompt: string;
+  generator: GeneratorSelection;
+  target: Target;
+  slug: string;
+  files: string[];
+  sizeBytes: number;
+  createdAt: number;
+}
+
+export interface HistoryListResponse {
+  items: HistoryItem[];
+}
