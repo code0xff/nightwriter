@@ -9,6 +9,7 @@ import {
 import type { PublicUser, WebAuthnJSON } from "@nightwriter/shared";
 import type { AppConfig } from "../config.js";
 import type { Database, UserRecord } from "../db/types.js";
+import { logger } from "../util/logger.js";
 import {
   type SessionClaims,
   hashPassword,
@@ -47,6 +48,7 @@ interface Flow {
 }
 
 const FLOW_TTL_MS = 5 * 60_000;
+const MAX_FLOWS = 1000;
 const SECRET_KEY = "session-secret";
 
 export class AuthService {
@@ -99,7 +101,7 @@ export class AuthService {
       !user ||
       user.role !== "admin" ||
       !user.passwordHash ||
-      !verifyPassword(password, user.passwordHash)
+      !(await verifyPassword(password, user.passwordHash))
     ) {
       throw new AuthError("invalid_credentials", 401, "Invalid credentials");
     }
@@ -115,13 +117,13 @@ export class AuthService {
     if (
       !user ||
       !user.passwordHash ||
-      !verifyPassword(current, user.passwordHash)
+      !(await verifyPassword(current, user.passwordHash))
     ) {
       throw new AuthError("invalid_credentials", 401, "Current password is wrong");
     }
     if (next.length < 8)
       throw new AuthError("not_verified", 400, "New password too short");
-    await this.db.users.setPassword(userId, hashPassword(next));
+    await this.db.users.setPassword(userId, await hashPassword(next));
   }
 
   /* --------------------------- passkey: register ---------------------- */
@@ -163,13 +165,22 @@ export class AuthService {
     response: WebAuthnJSON,
   ): Promise<{ user: PublicUser }> {
     const flow = this.takeFlow(flowId, "register");
-    const verification = await verifyRegistrationResponse({
-      response: response as unknown as RegistrationResponseJSON,
-      expectedChallenge: flow.challenge,
-      expectedOrigin: this.cfg.webauthn.origins,
-      expectedRPID: this.cfg.webauthn.rpID,
-      requireUserVerification: false,
-    });
+    let verification;
+    try {
+      verification = await verifyRegistrationResponse({
+        response: response as unknown as RegistrationResponseJSON,
+        expectedChallenge: flow.challenge,
+        expectedOrigin: this.cfg.webauthn.origins,
+        expectedRPID: this.cfg.webauthn.rpID,
+        requireUserVerification: false,
+      });
+    } catch (err) {
+      throw new AuthError(
+        "not_verified",
+        400,
+        `Passkey registration failed: ${(err as Error).message}`,
+      );
+    }
     if (!verification.verified || !verification.registrationInfo)
       throw new AuthError("not_verified", 400, "Passkey not verified");
 
@@ -187,6 +198,9 @@ export class AuthService {
         transports: cred.transports,
       },
     ];
+    // Guard against a race where the username was taken between start + finish.
+    if (await this.db.users.findByUsername(flow.username!))
+      throw new AuthError("username_taken", 409, "Username is taken");
     await this.db.users.insert(user);
     return { user: toPublicUser(user) };
   }
@@ -213,19 +227,28 @@ export class AuthService {
     if (!found)
       throw new AuthError("unknown_credential", 401, "Unknown passkey");
 
-    const verification = await verifyAuthenticationResponse({
-      response: response as unknown as AuthenticationResponseJSON,
-      expectedChallenge: flow.challenge,
-      expectedOrigin: this.cfg.webauthn.origins,
-      expectedRPID: this.cfg.webauthn.rpID,
-      requireUserVerification: false,
-      credential: {
-        id: found.credential.id,
-        publicKey: Buffer.from(found.credential.publicKey, "base64url"),
-        counter: found.credential.counter,
-        transports: found.credential.transports as never,
-      },
-    });
+    let verification;
+    try {
+      verification = await verifyAuthenticationResponse({
+        response: response as unknown as AuthenticationResponseJSON,
+        expectedChallenge: flow.challenge,
+        expectedOrigin: this.cfg.webauthn.origins,
+        expectedRPID: this.cfg.webauthn.rpID,
+        requireUserVerification: false,
+        credential: {
+          id: found.credential.id,
+          publicKey: Buffer.from(found.credential.publicKey, "base64url"),
+          counter: found.credential.counter,
+          transports: found.credential.transports as never,
+        },
+      });
+    } catch (err) {
+      throw new AuthError(
+        "not_verified",
+        401,
+        `Passkey verification failed: ${(err as Error).message}`,
+      );
+    }
     if (!verification.verified)
       throw new AuthError("not_verified", 401, "Passkey not verified");
 
@@ -249,6 +272,12 @@ export class AuthService {
 
   private newFlow(f: Omit<Flow, "expires">): string {
     this.sweepFlows();
+    // Bound the map so anonymous start calls can't exhaust memory.
+    while (this.flows.size >= MAX_FLOWS) {
+      const oldest = this.flows.keys().next().value;
+      if (oldest === undefined) break;
+      this.flows.delete(oldest);
+    }
     const id = newId("flw");
     this.flows.set(id, { ...f, expires: Date.now() + FLOW_TTL_MS });
     return id;
@@ -270,7 +299,13 @@ export class AuthService {
 
 /** Read the session secret from settings, or generate + persist one. */
 async function resolveSecret(cfg: AppConfig, db: Database): Promise<string> {
-  if (cfg.auth.sessionSecret) return cfg.auth.sessionSecret;
+  if (cfg.auth.sessionSecret) {
+    if (cfg.auth.sessionSecret.length < 16)
+      logger.warn(
+        "NIGHTWRITER_SESSION_SECRET is short (<16 chars); use a long random value",
+      );
+    return cfg.auth.sessionSecret;
+  }
   const existing = await db.settings.get(SECRET_KEY);
   if (existing) return existing;
   const secret = randomSecret(48);

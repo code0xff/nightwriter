@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import type { AuthSession, PublicUser } from "@nightwriter/shared";
-import { setAuthToken } from "./api";
+import { setAuthToken, setUnauthorizedHandler } from "./api";
 import { fetchMe } from "./authApi";
 
 const TOKEN_KEY = "nw_token";
@@ -25,6 +25,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Any 401 on an authenticated request drops the session back to login.
+    setUnauthorizedHandler(() => {
+      localStorage.removeItem(TOKEN_KEY);
+      setAuthToken(null);
+      setUser(null);
+    });
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) {
       setLoading(false);

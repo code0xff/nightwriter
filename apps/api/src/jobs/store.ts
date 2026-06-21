@@ -231,8 +231,9 @@ export class JobStore {
       record.stage = "ready";
       record.finishedAt = Date.now();
       this.touch(record);
-      // Persist to durable history before announcing completion. A persist
-      // failure must not fail the job — the live download still works.
+      // Persist to durable history before announcing completion. History is
+      // permanent, so a persist failure must fail the job rather than report a
+      // success whose only artifact (the temp zip) the TTL sweep later deletes.
       if (this.onSucceeded) {
         try {
           await this.onSucceeded(record);
@@ -241,6 +242,13 @@ export class JobStore {
             jobId: record.id,
             msg: err instanceof Error ? err.message : String(err),
           });
+          record.downloadReady = false;
+          this.finishError(
+            entry,
+            "packaging_failed",
+            "Generated the agent but failed to save it to history",
+          );
+          return;
         }
       }
       const done: DoneEvent = {

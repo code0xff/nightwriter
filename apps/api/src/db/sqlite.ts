@@ -32,7 +32,7 @@ CREATE TABLE credentials (
 CREATE INDEX idx_credentials_user ON credentials(user_id);
 CREATE TABLE history (
   id         TEXT PRIMARY KEY,
-  owner_id   TEXT NOT NULL,
+  owner_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   prompt     TEXT NOT NULL,
   generator  TEXT NOT NULL,
   target     TEXT NOT NULL,
@@ -84,8 +84,12 @@ function migrate(db: DB): void {
   db.pragma("foreign_keys = ON");
   const version = db.pragma("user_version", { simple: true }) as number;
   if (version < 1) {
-    db.exec(SCHEMA_V1);
-    db.pragma("user_version = 1");
+    // Apply schema + version bump atomically so an interrupted migration
+    // can't leave a half-created schema that won't re-migrate.
+    db.transaction(() => {
+      db.exec(SCHEMA_V1);
+      db.pragma("user_version = 1");
+    })();
   }
 }
 
@@ -208,9 +212,11 @@ class SqliteUsers implements UserRepository {
   }
 
   async updateCredentialCounter(credId: string, counter: number): Promise<void> {
+    // Monotonic: never let a concurrent/replayed login regress the counter,
+    // which would weaken authenticator clone detection.
     this.db
-      .prepare("UPDATE credentials SET counter = ? WHERE id = ?")
-      .run(counter, credId);
+      .prepare("UPDATE credentials SET counter = ? WHERE id = ? AND counter < ?")
+      .run(counter, credId, counter);
   }
 
   async setStatus(

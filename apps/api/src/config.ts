@@ -97,10 +97,8 @@ export function loadConfig(): AppConfig {
     webauthn: {
       rpName: process.env.NIGHTWRITER_RP_NAME ?? "Nightwriter",
       rpID: process.env.NIGHTWRITER_RP_ID ?? "localhost",
-      origins: (
-        process.env.NIGHTWRITER_ORIGIN ??
-        "http://localhost:5173,http://127.0.0.1:5173"
-      )
+      // Origin host must match rpID (default "localhost"); 127.0.0.1 would not.
+      origins: (process.env.NIGHTWRITER_ORIGIN ?? "http://localhost:5173")
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean),

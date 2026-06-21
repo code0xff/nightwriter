@@ -8,13 +8,13 @@ import {
 } from "../src/auth/crypto.js";
 
 describe("password hashing", () => {
-  it("verifies the correct password and rejects wrong ones", () => {
-    const hash = hashPassword("correct horse battery staple");
-    expect(verifyPassword("correct horse battery staple", hash)).toBe(true);
-    expect(verifyPassword("wrong", hash)).toBe(false);
+  it("verifies the correct password and rejects wrong ones", async () => {
+    const hash = await hashPassword("correct horse battery staple");
+    expect(await verifyPassword("correct horse battery staple", hash)).toBe(true);
+    expect(await verifyPassword("wrong", hash)).toBe(false);
   });
-  it("produces distinct salted hashes for the same password", () => {
-    expect(hashPassword("same")).not.toBe(hashPassword("same"));
+  it("produces distinct salted hashes for the same password", async () => {
+    expect(await hashPassword("same")).not.toBe(await hashPassword("same"));
   });
 });
 

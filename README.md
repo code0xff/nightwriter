@@ -120,7 +120,7 @@ All `/api/generate/*` and `/api/history/*` require a session token
 | `NIGHTWRITER_SESSION_SECRET` | _generated+persisted_ | HMAC secret for session tokens |
 | `NIGHTWRITER_SESSION_TTL_MS` | `604800000` | session lifetime (7d) |
 | `NIGHTWRITER_RP_ID` / `NIGHTWRITER_RP_NAME` | `localhost` / `Nightwriter` | WebAuthn relying party |
-| `NIGHTWRITER_ORIGIN` | `http://localhost:5173,http://127.0.0.1:5173` | allowed passkey origins |
+| `NIGHTWRITER_ORIGIN` | `http://localhost:5173` | allowed passkey origins (host must match RP ID) |
 
 ## Security notes
 

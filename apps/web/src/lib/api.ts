@@ -18,6 +18,12 @@ export function setAuthToken(token: string | null): void {
   authToken = token;
 }
 
+let onUnauthorized: (() => void) | null = null;
+/** Called when an authenticated request gets a 401 (e.g. expired session). */
+export function setUnauthorizedHandler(fn: (() => void) | null): void {
+  onUnauthorized = fn;
+}
+
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
   return authToken ? { ...extra, Authorization: `Bearer ${authToken}` } : extra;
 }
@@ -48,6 +54,9 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }),
   });
   if (!res.ok) {
+    // A 401 while we hold a token means the session is gone/expired — drop it
+    // so the app falls back to the login screen. (Login attempts carry no token.)
+    if (res.status === 401 && authToken) onUnauthorized?.();
     let message = `request failed (${res.status})`;
     let code: string | undefined;
     try {

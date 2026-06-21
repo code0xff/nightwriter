@@ -58,6 +58,9 @@ describe("sqlite user repository", () => {
 describe("sqlite history repository", () => {
   it("lists by owner and only lets the owner delete", async () => {
     const d = db();
+    // history.owner_id has a FK to users, so the owners must exist first.
+    await d.users.insert(user("owner1"));
+    await d.users.insert(user("owner2"));
     await d.history.upsert(item("h1", "owner1"));
     await d.history.upsert(item("h2", "owner1"));
     await d.history.upsert(item("h3", "owner2"));

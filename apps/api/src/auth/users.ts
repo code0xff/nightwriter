@@ -42,7 +42,7 @@ export async function seedAdmin(
     authMethod: "password",
     createdAt: Date.now(),
     username: username.toLowerCase(),
-    passwordHash: hashPassword(pw),
+    passwordHash: await hashPassword(pw),
   });
   logger.info(`Seeded admin user "${username}"`);
 }
