@@ -48,19 +48,24 @@ export function RunView(props: Props) {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0">
+        <CardHeader className="flex-col items-start gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
+            {active && (
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-warning opacity-75" />
+                <span className="relative inline-flex size-2 rounded-full bg-warning" />
+              </span>
+            )}
             <CardTitle className="text-sm">Generation</CardTitle>
             <StateBadge state={state} />
           </div>
-          <div className="flex items-center gap-2">
-            {active && (
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            {active ? (
               <Button size="sm" variant="outline" onClick={onCancel}>
                 <X />
                 Cancel
               </Button>
-            )}
-            {!active && (
+            ) : (
               <Button size="sm" variant="outline" onClick={onReset}>
                 <RotateCcw />
                 New
@@ -70,13 +75,16 @@ export function RunView(props: Props) {
         </CardHeader>
         <CardContent className="space-y-4">
           <Stepper stage={stage} state={state} />
-          <Progress value={stageProgress(stage)} />
+          <ProgressBar active={active} state={state} stage={stage} />
           <LogConsole logs={logs} />
         </CardContent>
       </Card>
 
       {error && (
-        <Alert variant="destructive">
+        <Alert
+          variant="destructive"
+          className="duration-300 animate-in fade-in slide-in-from-bottom-2"
+        >
           <AlertCircle />
           <AlertTitle>
             Generation failed
@@ -102,7 +110,38 @@ function StateBadge({ state }: { state: JobState }) {
     canceled: { variant: "secondary", label: "Canceled" },
   };
   const { variant, label } = map[state];
-  return <Badge variant={variant as never}>{label}</Badge>;
+  const pulsing = state === "queued" || state === "running";
+  return (
+    <Badge variant={variant as never} className={cn(pulsing && "animate-pulse")}>
+      {label}
+    </Badge>
+  );
+}
+
+function ProgressBar({
+  active,
+  state,
+  stage,
+}: {
+  active: boolean;
+  state: JobState;
+  stage: JobStage;
+}) {
+  // While running, show an indeterminate moving bar; on finish, a solid bar.
+  if (active) {
+    return (
+      <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary">
+        <span className="nw-progress-indeterminate" />
+      </div>
+    );
+  }
+  const tone =
+    state === "succeeded"
+      ? "bg-success"
+      : state === "failed" || state === "canceled"
+        ? "bg-destructive"
+        : "bg-primary";
+  return <Progress value={stageProgress(stage)} indicatorClassName={tone} />;
 }
 
 function Stepper({ stage, state }: { stage: JobStage; state: JobState }) {
@@ -168,7 +207,7 @@ function LogConsole({ logs }: { logs: LogEvent[] }) {
         <div
           key={i}
           className={cn(
-            "whitespace-pre-wrap break-words",
+            "whitespace-pre-wrap break-words duration-200 animate-in fade-in slide-in-from-bottom-1",
             l.level === "error" && "text-destructive",
             l.level === "warn" && "text-warning",
           )}
@@ -182,13 +221,13 @@ function LogConsole({ logs }: { logs: LogEvent[] }) {
 
 function ResultCard({ jobId, done }: { jobId: string; done: DoneEvent }) {
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
+    <Card className="duration-300 animate-in fade-in slide-in-from-bottom-2">
+      <CardHeader className="flex-col items-start gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <CheckCircle2 className="size-4 text-success" />
           <CardTitle className="text-sm">Artifact ready</CardTitle>
         </div>
-        <Button asChild size="sm">
+        <Button asChild size="sm" className="w-full sm:w-auto">
           <a href={downloadUrl(jobId)} download>
             <Download />
             Download zip
@@ -202,9 +241,12 @@ function ResultCard({ jobId, done }: { jobId: string; done: DoneEvent }) {
           </div>
           <ul className="space-y-1">
             {done.files.map((f) => (
-              <li key={f} className="flex items-center gap-2 font-mono text-xs">
-                <FileText className="size-3.5 text-muted-foreground" />
-                {f}
+              <li
+                key={f}
+                className="flex items-start gap-2 font-mono text-xs"
+              >
+                <FileText className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 break-all">{f}</span>
               </li>
             ))}
           </ul>

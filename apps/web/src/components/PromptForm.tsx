@@ -166,8 +166,9 @@ export function PromptForm({ disabled, onSubmit }: Props) {
           </div>
         </div>
 
-        <div className="flex justify-end pt-1">
+        <div className="flex flex-col pt-1 sm:flex-row sm:justify-end">
           <Button
+            className="w-full sm:w-auto"
             disabled={!canSubmit}
             onClick={() =>
               onSubmit({

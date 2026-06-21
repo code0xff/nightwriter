@@ -1,0 +1,28 @@
+/* App-specific animations — kept out of the shared design-system index.css. */
+
+@keyframes nw-indeterminate {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}
+
+/* Moving bar used as an indeterminate progress indicator while a job runs. */
+.nw-progress-indeterminate {
+  position: absolute;
+  inset: 0;
+  width: 22%;
+  border-radius: 9999px;
+  background: hsl(var(--primary));
+  animation: nw-indeterminate 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nw-progress-indeterminate {
+    animation: none;
+    width: 100%;
+    transform: none;
+  }
+}
