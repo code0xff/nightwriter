@@ -147,7 +147,8 @@ export class AuthService {
     return { user: toPublicUser(user) };
   }
 
-  async changeAdminPassword(
+  /** Change a user's own password (any role) after verifying the current one. */
+  async changePassword(
     userId: string,
     current: string,
     next: string,
@@ -162,6 +163,32 @@ export class AuthService {
     if (next.length < MIN_PASSWORD)
       throw new AuthError("weak_password", 400, "New password too short");
     await this.db.users.setPassword(userId, await hashPassword(next));
+  }
+
+  /**
+   * Change a user's own login handle. Works for password- and passkey-based
+   * accounts alike — sign-in is keyed by credential id, not the username, so a
+   * passkey user can rename too (their authenticator may still display the old
+   * name, which is cosmetic only).
+   */
+  async changeUsername(userId: string, username: string): Promise<PublicUser> {
+    this.validateNewUsername(username);
+    const lower = username.toLowerCase();
+    const user = await this.db.users.findById(userId);
+    if (!user) throw new AuthError("invalid_input", 404, "User not found");
+    if (lower !== user.username) {
+      const existing = await this.db.users.findByUsername(lower);
+      if (existing && existing.id !== userId)
+        throw new AuthError("username_taken", 409, "Username is taken");
+      try {
+        await this.db.users.setUsername(userId, lower);
+      } catch {
+        // Unique-constraint race between the check and the update.
+        throw new AuthError("username_taken", 409, "Username is taken");
+      }
+    }
+    const updated = (await this.db.users.findById(userId)) ?? user;
+    return toPublicUser(updated);
   }
 
   /* --------------------------- passkey: register ---------------------- */

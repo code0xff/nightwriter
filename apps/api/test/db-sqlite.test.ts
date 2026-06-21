@@ -58,6 +58,17 @@ describe("sqlite user repository", () => {
     expect((await d.users.findByCredentialId("credA"))?.credential.counter).toBe(5);
   });
 
+  it("renames a user and rejects a duplicate username", async () => {
+    const d = db();
+    await d.users.insert(user("usr_a", { username: "alpha" }));
+    await d.users.insert(user("usr_b", { username: "beta" }));
+    await d.users.setUsername("usr_a", "gamma");
+    expect((await d.users.findById("usr_a"))?.username).toBe("gamma");
+    expect((await d.users.findByUsername("gamma"))?.id).toBe("usr_a");
+    // the unique constraint rejects taking another user's name
+    await expect(d.users.setUsername("usr_a", "beta")).rejects.toThrow();
+  });
+
   it("activates users but refuses to change admins; counts admins", async () => {
     const d = db();
     await d.users.insert(user("usr_admin", { role: "admin", status: "active" }));

@@ -15,6 +15,7 @@ import {
   PanelLeftClose,
   PenLine,
   Radio,
+  Settings,
   ShieldCheck,
   Sparkles,
   Sun,
@@ -30,6 +31,7 @@ import type {
   PublicUser,
 } from "@nightwriter/shared";
 import { Button } from "@/components/ui/button";
+import { AccountPage } from "@/components/AccountPage";
 import { AdminPage } from "@/components/AdminPage";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { LoginScreen } from "@/components/LoginScreen";
@@ -39,7 +41,7 @@ import { cn } from "@/lib/utils";
 import { cancelJob, startGeneration, streamJob } from "@/lib/api";
 import { useAuth } from "@/lib/authContext";
 
-type View = "generate" | "history" | "admin";
+type View = "generate" | "history" | "account" | "admin";
 
 interface RunState {
   jobId: string;
@@ -151,6 +153,7 @@ function AppShell(props: {
   const nav: NavItem[] = [
     { id: "generate", label: "Generate", icon: <Sparkles className="size-4" />, show: true },
     { id: "history", label: "History", icon: <FileClock className="size-4" />, show: true },
+    { id: "account", label: "Account", icon: <Settings className="size-4" />, show: true },
     { id: "admin", label: "Admin", icon: <Users className="size-4" />, show: user.role === "admin" },
   ];
 
@@ -217,6 +220,7 @@ function AppShell(props: {
           <div className="container relative z-10 max-w-3xl space-y-5 py-6">
             {view === "generate" && <Generator />}
             {view === "history" && <HistoryPanel />}
+            {view === "account" && <AccountPage />}
             {view === "admin" && user.role === "admin" && <AdminPage />}
             <footer className="pt-2 text-center text-[11px] text-muted-foreground">
               Definitions are produced by a real CLI subprocess in an isolated,

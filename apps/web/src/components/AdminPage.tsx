@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, ShieldCheck, UserCheck, UserX } from "lucide-react";
+import { Loader2, UserCheck, UserX } from "lucide-react";
 import type { AdminUser } from "@nightwriter/shared";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -11,15 +11,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { changeAdminPassword, listUsers, setUserActive } from "@/lib/authApi";
+import { listUsers, setUserActive } from "@/lib/authApi";
 
 export function AdminPage() {
   return (
     <div className="space-y-4">
       <UsersCard />
-      <PasswordCard />
     </div>
   );
 }
@@ -124,75 +121,6 @@ function UsersCard() {
             )}
           </div>
         ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-function PasswordCard() {
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  const go = async () => {
-    setBusy(true);
-    setMsg(null);
-    try {
-      await changeAdminPassword(current, next);
-      setMsg({ ok: true, text: "Password updated." });
-      setCurrent("");
-      setNext("");
-    } catch (err) {
-      setMsg({ ok: false, text: err instanceof Error ? err.message : String(err) });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-sm">Change admin password</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form
-          className="space-y-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void go();
-          }}
-        >
-          <div className="space-y-1.5">
-            <Label htmlFor="cur-pw">Current password</Label>
-            <Input
-              id="cur-pw"
-              type="password"
-              value={current}
-              onChange={(e) => setCurrent(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="new-pw">New password (min 8 chars)</Label>
-            <Input
-              id="new-pw"
-              type="password"
-              value={next}
-              onChange={(e) => setNext(e.target.value)}
-            />
-          </div>
-          <div className="flex justify-end">
-            <Button type="submit" disabled={busy || !current || next.length < 8}>
-              {busy ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
-              Update password
-            </Button>
-          </div>
-          {msg && (
-            <Alert variant={msg.ok ? "success" : "destructive"}>
-              <AlertDescription>{msg.text}</AlertDescription>
-            </Alert>
-          )}
-        </form>
       </CardContent>
     </Card>
   );

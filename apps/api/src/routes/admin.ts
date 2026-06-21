@@ -50,7 +50,7 @@ export function registerAdminRoutes(
         .code(400)
         .send({ error: "currentPassword and newPassword required" });
     try {
-      await auth.changeAdminPassword(
+      await auth.changePassword(
         req.user!.id,
         body.currentPassword,
         body.newPassword,

@@ -8,19 +8,19 @@ export type { UserRecord } from "../db/types.js";
 export function toPublicUser(u: UserRecord): PublicUser {
   return {
     id: u.id,
+    username: u.username,
     displayName: u.displayName,
     role: u.role,
     status: u.status,
     createdAt: u.createdAt,
-  };
-}
-
-export function toAdminUser(u: UserRecord): AdminUser {
-  return {
-    ...toPublicUser(u),
     hasPassword: !!u.passwordHash,
     passkeyCount: u.credentials?.length ?? 0,
   };
+}
+
+/** Admin list view — identical to the public shape. */
+export function toAdminUser(u: UserRecord): AdminUser {
+  return toPublicUser(u);
 }
 
 /** Ensure an admin exists, seeding from env (password generated if absent). */

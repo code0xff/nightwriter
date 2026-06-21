@@ -232,6 +232,14 @@ class SqliteUsers implements UserRepository {
       .prepare("UPDATE users SET password_hash = ? WHERE id = ?")
       .run(passwordHash, userId);
   }
+
+  async setUsername(userId: string, username: string): Promise<void> {
+    // The UNIQUE constraint on users.username throws on a collision; the
+    // service maps that to a 409.
+    this.db
+      .prepare("UPDATE users SET username = ? WHERE id = ?")
+      .run(username, userId);
+  }
 }
 
 class SqliteHistory implements HistoryRepository {

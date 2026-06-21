@@ -56,9 +56,6 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }),
   });
   if (!res.ok) {
-    // A 401 while we hold a token means the session is gone/expired — drop it
-    // so the app falls back to the login screen. (Login attempts carry no token.)
-    if (res.status === 401 && authToken) onUnauthorized?.();
     let message = `request failed (${res.status})`;
     let code: string | undefined;
     try {
@@ -68,6 +65,11 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       /* ignore */
     }
+    // A *session* 401 (the auth guard's code-less "unauthorized") while we hold
+    // a token means the session is gone/expired — drop it so the app falls back
+    // to the login screen. Operation-level 401s carry a code (e.g. a wrong
+    // current password on /account/password) and must NOT log the user out.
+    if (res.status === 401 && authToken && !code) onUnauthorized?.();
     throw new ApiError(res.status, message, code);
   }
   return (res.status === 204 ? undefined : await res.json()) as T;

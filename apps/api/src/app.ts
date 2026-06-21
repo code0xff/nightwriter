@@ -8,6 +8,7 @@ import { type Database, openDatabase } from "./db/index.js";
 import { createRunner } from "./generate/runner.js";
 import { HistoryStore } from "./history/store.js";
 import { JobStore } from "./jobs/store.js";
+import { registerAccountRoutes } from "./routes/account.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerGenerateRoutes } from "./routes/generate.js";
@@ -55,6 +56,7 @@ export async function buildApp(
 
   app.get("/health", async () => ({ ok: true }));
   registerAuthRoutes(app, auth, guards);
+  registerAccountRoutes(app, auth, guards);
   registerAdminRoutes(app, auth, guards);
   registerGenerateRoutes(app, store, guards);
   registerHistoryRoutes(app, history, guards);

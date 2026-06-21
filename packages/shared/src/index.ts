@@ -127,10 +127,16 @@ export type UserStatus = "active" | "pending";
 /** User shape safe to expose to the client (no secrets). */
 export interface PublicUser {
   id: string;
+  /** Login handle (unique, lowercased). */
+  username: string;
   displayName: string;
   role: Role;
   status: UserStatus;
   createdAt: number;
+  /** Whether the account can sign in with a password. */
+  hasPassword: boolean;
+  /** Number of registered passkeys. */
+  passkeyCount: number;
 }
 
 export interface AuthSession {
@@ -156,10 +162,18 @@ export interface RegisterRequest {
   displayName?: string;
 }
 
-/** POST /api/admin/password (admin only). */
+/**
+ * POST /api/account/password — change your own password (requires the current
+ * one). Also used by POST /api/admin/password for the admin account.
+ */
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
+}
+
+/** POST /api/account/username — change your own login handle. */
+export interface UpdateUsernameRequest {
+  username: string;
 }
 
 /* ---- Passkeys (WebAuthn) — an alternative to password, can coexist ---- *
@@ -189,11 +203,8 @@ export interface PasskeyLoginFinishRequest {
   response: WebAuthnJSON;
 }
 
-/** Admin view of a user (GET /api/admin/users). */
-export interface AdminUser extends PublicUser {
-  hasPassword: boolean;
-  passkeyCount: number;
-}
+/** Admin view of a user (GET /api/admin/users). Same shape as PublicUser. */
+export type AdminUser = PublicUser;
 export interface AdminUsersResponse {
   users: AdminUser[];
 }

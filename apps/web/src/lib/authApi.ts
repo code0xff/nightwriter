@@ -84,11 +84,23 @@ export async function setUserActive(id: string, active: boolean): Promise<void> 
   });
 }
 
-export async function changeAdminPassword(
+/* ------------------------------ account ------------------------------- */
+
+/** Change your own login handle. Returns the updated user. */
+export async function updateUsername(username: string): Promise<PublicUser> {
+  const res = await request<{ user: PublicUser }>("/api/account/username", {
+    method: "POST",
+    body: JSON.stringify({ username }),
+  });
+  return res.user;
+}
+
+/** Change your own password (password accounts only). */
+export async function changePassword(
   currentPassword: string,
   newPassword: string,
 ): Promise<void> {
-  await request("/api/admin/password", {
+  await request("/api/account/password", {
     method: "POST",
     body: JSON.stringify({ currentPassword, newPassword }),
   });

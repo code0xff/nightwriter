@@ -15,6 +15,8 @@ interface AuthContextValue {
   user: PublicUser | null;
   loading: boolean;
   setSession: (session: AuthSession) => void;
+  /** Replace the current user (e.g. after a self-service account change). */
+  updateUser: (user: PublicUser) => void;
   logout: () => void;
 }
 
@@ -58,8 +60,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const updateUser = (next: PublicUser) => setUser(next);
+
   return (
-    <AuthContext.Provider value={{ user, loading, setSession, logout }}>
+    <AuthContext.Provider
+      value={{ user, loading, setSession, updateUser, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );
