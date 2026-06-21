@@ -1,4 +1,10 @@
-import { type ReactNode, useCallback, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   FileClock,
   LogOut,
@@ -44,15 +50,26 @@ interface RunState {
   error?: GenErrorEvent;
 }
 
+const THEME_KEY = "nw_theme";
+
 export default function App() {
   const { user, loading, logout } = useAuth();
-  const [dark, setDark] = useState(true);
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem(THEME_KEY);
+    return saved ? saved === "dark" : true; // default: dark
+  });
 
-  const toggleTheme = () => {
-    const next = !dark;
-    setDark(next);
-    document.documentElement.classList.toggle("dark", next);
-  };
+  // Keep the <html> class in sync with state (also applies the saved theme on load).
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+  }, [dark]);
+
+  const toggleTheme = () =>
+    setDark((d) => {
+      const next = !d;
+      localStorage.setItem(THEME_KEY, next ? "dark" : "light");
+      return next;
+    });
 
   if (loading)
     return (
