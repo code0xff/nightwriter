@@ -8,7 +8,7 @@ import type { CliAdapter, Invocation, InvocationContext } from "./types.js";
 export function createCodexAdapter(bin: string): CliAdapter {
   return {
     id: "codex",
-    defaultModel: "gpt-5.4-codex",
+    defaultModel: "gpt-5.5",
     buildInvocation(ctx: InvocationContext): Invocation {
       const args = ["exec"];
       const model = ctx.model ?? this.defaultModel;
