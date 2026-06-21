@@ -81,7 +81,7 @@ The hook falls back to the nvm-managed Node when `node`/`pnpm` aren't on PATH.
 |-----|---------|-|
 | `PORT` | `8787` | |
 | `HOST` | `127.0.0.1` | |
-| `CORS_ORIGIN` | `*` | |
+| `CORS_ORIGIN` | `http://localhost:5173` | restrict who can drive local CLIs |
 | `NIGHTWRITER_MAX_CONCURRENCY` | `2` | concurrent CLI subprocesses; excess queued |
 | `NIGHTWRITER_JOB_TIMEOUT_MS` | `120000` | per-job subprocess timeout |
 | `NIGHTWRITER_ARTIFACT_TTL_MS` | `1800000` | artifact lifetime before cleanup |

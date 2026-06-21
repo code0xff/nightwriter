@@ -35,9 +35,13 @@ export function loadConfig(): AppConfig {
   return {
     host: process.env.HOST ?? "127.0.0.1",
     port: envInt("PORT", 8787),
-    corsOrigin: process.env.CORS_ORIGIN ?? "*",
-    maxConcurrency: envInt("NIGHTWRITER_MAX_CONCURRENCY", 2),
-    jobTimeoutMs: envInt("NIGHTWRITER_JOB_TIMEOUT_MS", 120_000),
+    // Restrict to the local web origin by default; a malicious site must not
+    // be able to drive the user's authenticated local CLIs. Override for
+    // custom deployments via CORS_ORIGIN.
+    corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
+    // Clamp to >= 1 so a bad value can't permanently stall the queue.
+    maxConcurrency: Math.max(1, envInt("NIGHTWRITER_MAX_CONCURRENCY", 2)),
+    jobTimeoutMs: Math.max(1_000, envInt("NIGHTWRITER_JOB_TIMEOUT_MS", 120_000)),
     artifactTtlMs: envInt("NIGHTWRITER_ARTIFACT_TTL_MS", 30 * 60_000),
     cleanupIntervalMs: envInt("NIGHTWRITER_CLEANUP_INTERVAL_MS", 60_000),
     workRoot:

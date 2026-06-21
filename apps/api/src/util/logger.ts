@@ -4,24 +4,26 @@
  * client (SSE log lines) or written to server logs.
  */
 
-const SECRET_PATTERNS: RegExp[] = [
-  // Common API-key prefixes (Anthropic, OpenAI, GitHub, generic sk-).
-  /\b(sk-ant-[A-Za-z0-9_-]{8,})\b/g,
-  /\b(sk-[A-Za-z0-9]{16,})\b/g,
-  /\b(gh[pousr]_[A-Za-z0-9]{20,})\b/g,
+// Patterns whose ENTIRE match is the secret → replaced wholesale with "***".
+const FULL_SECRET_PATTERNS: RegExp[] = [
+  /\bsk-ant-[A-Za-z0-9_-]{8,}\b/g,
+  /\bsk-[A-Za-z0-9]{16,}\b/g,
+  /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g,
+];
+
+// Patterns with a prefix to keep (group 1) followed by a secret value to mask.
+const PREFIXED_SECRET_PATTERNS: RegExp[] = [
   // Bearer tokens.
-  /\b(Bearer\s+)[A-Za-z0-9._-]{12,}/g,
-  // key=value style secrets.
-  /\b((?:api[_-]?key|token|secret|password|passwd|authorization)\s*[=:]\s*)\S+/gi,
+  /(Bearer\s+)[A-Za-z0-9._-]{12,}/g,
+  // key=value / key: value style secrets (optionally quoted).
+  /((?:api[_-]?key|token|secret|password|passwd|authorization)\s*[=:]\s*)(?:"[^"]*"|'[^']*'|\S+)/gi,
 ];
 
 export function maskSecrets(text: string): string {
   let out = text;
-  for (const re of SECRET_PATTERNS) {
-    out = out.replace(re, (_m, prefix: string | undefined) =>
-      prefix ? `${prefix}***` : "***",
-    );
-  }
+  for (const re of FULL_SECRET_PATTERNS) out = out.replace(re, "***");
+  for (const re of PREFIXED_SECRET_PATTERNS)
+    out = out.replace(re, (_m, prefix: string) => `${prefix}***`);
   return out;
 }
 

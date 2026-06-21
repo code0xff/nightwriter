@@ -16,10 +16,17 @@ model: sonnet                    # haiku | sonnet | opus
 operating procedure, and constraints. Be specific and actionable.>`,
   definitionPath: (slug) => `.claude/agents/${slug}.md`,
   installScript: (_ctx, defPath) => `# Install the subagent into the current project.
+# The zip mirrors the project layout, so run this from your project root.
+SRC="${defPath}"
 DEST=".claude/agents"
 mkdir -p "$DEST"
-cp "${defPath}" "$DEST/"
-echo "Installed $(basename "${defPath}") to $DEST/"
+TARGET="$DEST/$(basename "$SRC")"
+if [ "$SRC" -ef "$TARGET" ]; then
+  echo "Definition already in place at $SRC"
+else
+  cp "$SRC" "$TARGET"
+  echo "Installed $(basename "$SRC") to $DEST/"
+fi
 echo "Restart Claude Code or run /agents to pick it up."`,
   activationGuide: (ctx, defPath) => `# ${ctx.slug} — Claude Code subagent
 
@@ -55,10 +62,17 @@ operating contract for the Codex CLI:
 Be concrete and imperative.`,
   definitionPath: (slug) => `.codex/agents/${slug}.md`,
   installScript: (_ctx, defPath) => `# Install the agent definition for the Codex CLI.
+# The zip mirrors the project layout, so run this from your project root.
+SRC="${defPath}"
 DEST=".codex/agents"
 mkdir -p "$DEST"
-cp "${defPath}" "$DEST/"
-echo "Installed $(basename "${defPath}") to $DEST/"
+TARGET="$DEST/$(basename "$SRC")"
+if [ "$SRC" -ef "$TARGET" ]; then
+  echo "Definition already in place at $SRC"
+else
+  cp "$SRC" "$TARGET"
+  echo "Installed $(basename "$SRC") to $DEST/"
+fi
 echo "Reference it from your project's AGENTS.md or pass it to 'codex exec'."`,
   activationGuide: (ctx, defPath) => `# ${ctx.slug} — Codex agent
 
