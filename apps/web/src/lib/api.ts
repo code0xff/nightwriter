@@ -3,6 +3,7 @@ import type {
   ErrorEvent as GenErrorEvent,
   GenerateRequest,
   GenerateResponse,
+  HistoryListResponse,
   JobStatus,
   LogEvent,
   StatusEvent,
@@ -10,33 +11,76 @@ import type {
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
 
-export async function startGeneration(
-  req: GenerateRequest,
-): Promise<GenerateResponse> {
-  const res = await fetch(`${BASE}/api/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(req),
-  });
-  if (!res.ok) {
-    const detail = await safeError(res);
-    throw new Error(detail);
-  }
-  return (await res.json()) as GenerateResponse;
+/* ------------------------------ auth token ------------------------------ */
+
+let authToken: string | null = null;
+export function setAuthToken(token: string | null): void {
+  authToken = token;
 }
 
-export async function getJobStatus(jobId: string): Promise<JobStatus> {
-  const res = await fetch(`${BASE}/api/generate/${jobId}`);
-  if (!res.ok) throw new Error(await safeError(res));
-  return (await res.json()) as JobStatus;
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return authToken ? { ...extra, Authorization: `Bearer ${authToken}` } : extra;
+}
+
+/** Append the token as a query param (for URLs that can't carry a header). */
+function withToken(url: string): string {
+  if (!authToken) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}token=${encodeURIComponent(authToken)}`;
+}
+
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+    readonly code?: string,
+  ) {
+    super(message);
+  }
+}
+
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers: authHeaders({
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...((init?.headers as Record<string, string>) ?? {}),
+    }),
+  });
+  if (!res.ok) {
+    let message = `request failed (${res.status})`;
+    let code: string | undefined;
+    try {
+      const body = (await res.json()) as { error?: string; code?: string };
+      if (body.error) message = body.error;
+      code = body.code;
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(res.status, message, code);
+  }
+  return (res.status === 204 ? undefined : await res.json()) as T;
+}
+
+/* ------------------------------ generation ------------------------------ */
+
+export function startGeneration(req: GenerateRequest): Promise<GenerateResponse> {
+  return request<GenerateResponse>("/api/generate", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export function getJobStatus(jobId: string): Promise<JobStatus> {
+  return request<JobStatus>(`/api/generate/${jobId}`);
 }
 
 export async function cancelJob(jobId: string): Promise<void> {
-  await fetch(`${BASE}/api/generate/${jobId}/cancel`, { method: "POST" });
+  await request(`/api/generate/${jobId}/cancel`, { method: "POST" });
 }
 
 export function downloadUrl(jobId: string): string {
-  return `${BASE}/api/generate/${jobId}/download`;
+  return withToken(`${BASE}/api/generate/${jobId}/download`);
 }
 
 export interface StreamHandlers {
@@ -44,29 +88,23 @@ export interface StreamHandlers {
   onLog?: (e: LogEvent) => void;
   onDone?: (e: DoneEvent) => void;
   onError?: (e: GenErrorEvent) => void;
-  /** Network-level failure (connection dropped before a terminal event). */
   onConnectionError?: () => void;
 }
 
-/**
- * Subscribe to a job's SSE stream. Returns a function that closes the stream.
- * The stream auto-closes on a `done` or `error` event.
- */
 export function streamJob(jobId: string, handlers: StreamHandlers): () => void {
-  const es = new EventSource(`${BASE}/api/generate/${jobId}/events`);
+  const es = new EventSource(withToken(`${BASE}/api/generate/${jobId}/events`));
   let terminated = false;
-
   const close = () => {
     terminated = true;
     es.close();
   };
 
-  es.addEventListener("status", (ev) => {
-    handlers.onStatus?.(JSON.parse((ev as MessageEvent).data) as StatusEvent);
-  });
-  es.addEventListener("log", (ev) => {
-    handlers.onLog?.(JSON.parse((ev as MessageEvent).data) as LogEvent);
-  });
+  es.addEventListener("status", (ev) =>
+    handlers.onStatus?.(JSON.parse((ev as MessageEvent).data) as StatusEvent),
+  );
+  es.addEventListener("log", (ev) =>
+    handlers.onLog?.(JSON.parse((ev as MessageEvent).data) as LogEvent),
+  );
   es.addEventListener("done", (ev) => {
     handlers.onDone?.(JSON.parse((ev as MessageEvent).data) as DoneEvent);
     close();
@@ -77,19 +115,22 @@ export function streamJob(jobId: string, handlers: StreamHandlers): () => void {
       handlers.onError?.(JSON.parse(me.data) as GenErrorEvent);
       close();
     } else if (!terminated) {
-      // EventSource transport error (not an app-level error event).
       handlers.onConnectionError?.();
     }
   });
-
   return close;
 }
 
-async function safeError(res: Response): Promise<string> {
-  try {
-    const body = (await res.json()) as { error?: string };
-    return body.error ?? `request failed (${res.status})`;
-  } catch {
-    return `request failed (${res.status})`;
-  }
+/* ------------------------------- history -------------------------------- */
+
+export function listHistory(): Promise<HistoryListResponse> {
+  return request<HistoryListResponse>("/api/history");
+}
+
+export function historyDownloadUrl(id: string): string {
+  return withToken(`${BASE}/api/history/${id}/download`);
+}
+
+export async function deleteHistory(id: string): Promise<void> {
+  await request(`/api/history/${id}`, { method: "DELETE" });
 }
