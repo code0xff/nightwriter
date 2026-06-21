@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import type {
   ChangePasswordRequest,
   MeResponse,
-  UpdateUsernameRequest,
+  UpdateDisplayNameRequest,
 } from "@nightwriter/shared";
 import { AuthError, type AuthService } from "../auth/service.js";
 import type { Guards } from "../auth/guards.js";
@@ -21,12 +21,12 @@ export function registerAccountRoutes(
 ): void {
   const authed = { preHandler: [guards.requireAuth, guards.requireActive] };
 
-  app.post("/api/account/username", authed, async (req, reply) => {
-    const body = (req.body ?? {}) as Partial<UpdateUsernameRequest>;
-    if (!body.username)
-      return reply.code(400).send({ error: "username required" });
+  app.post("/api/account/display-name", authed, async (req, reply) => {
+    const body = (req.body ?? {}) as Partial<UpdateDisplayNameRequest>;
+    if (typeof body.displayName !== "string" || !body.displayName.trim())
+      return reply.code(400).send({ error: "displayName required" });
     try {
-      const user = await auth.changeUsername(req.user!.id, body.username);
+      const user = await auth.changeDisplayName(req.user!.id, body.displayName);
       const res: MeResponse = { user };
       return reply.send(res);
     } catch (err) {

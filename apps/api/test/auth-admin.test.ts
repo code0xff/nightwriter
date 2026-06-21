@@ -110,7 +110,7 @@ describe("password auth", () => {
     expect(weak.statusCode).toBe(400);
   });
 
-  it("lets a user change their own username and password", async () => {
+  it("lets a user change their own display name and password", async () => {
     // register + activate a fresh password user
     await app.app.inject({
       method: "POST",
@@ -132,28 +132,33 @@ describe("password auth", () => {
       authorization: `Bearer ${(login.json() as { token: string }).token}`,
     });
 
-    // change username
+    // change display name (doesn't affect the sign-in username)
     const rename = await app.app.inject({
       method: "POST",
-      url: "/api/account/username",
+      url: "/api/account/display-name",
       headers: carol(),
-      payload: { username: "carol-new" },
+      payload: { displayName: "Carol New" },
     });
     expect(rename.statusCode).toBe(200);
-    expect((rename.json() as { user: { username: string } }).user.username).toBe(
-      "carol-new",
-    );
+    const renamed = rename.json() as {
+      user: { displayName: string; username: string };
+    };
+    expect(renamed.user.displayName).toBe("Carol New");
+    expect(renamed.user.username).toBe("carol");
 
-    // the new username logs in; the old one no longer exists
+    // an empty display name is rejected
     expect(
       (
         await app.app.inject({
           method: "POST",
-          url: "/api/auth/login",
-          payload: { username: "carol-new", password: "carol-password" },
+          url: "/api/account/display-name",
+          headers: carol(),
+          payload: { displayName: "   " },
         })
       ).statusCode,
-    ).toBe(200);
+    ).toBe(400);
+
+    // sign-in still works with the unchanged username
     expect(
       (
         await app.app.inject({
@@ -162,16 +167,7 @@ describe("password auth", () => {
           payload: { username: "carol", password: "carol-password" },
         })
       ).statusCode,
-    ).toBe(401);
-
-    // can't take an existing username
-    const clash = await app.app.inject({
-      method: "POST",
-      url: "/api/account/username",
-      headers: carol(),
-      payload: { username: "admin" },
-    });
-    expect(clash.statusCode).toBe(409);
+    ).toBe(200);
 
     // change password (wrong current is rejected, correct one works)
     expect(
@@ -196,7 +192,7 @@ describe("password auth", () => {
         await app.app.inject({
           method: "POST",
           url: "/api/auth/login",
-          payload: { username: "carol-new", password: "carol-updated" },
+          payload: { username: "carol", password: "carol-updated" },
         })
       ).statusCode,
     ).toBe(200);

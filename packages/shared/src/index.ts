@@ -171,9 +171,9 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
-/** POST /api/account/username — change your own login handle. */
-export interface UpdateUsernameRequest {
-  username: string;
+/** POST /api/account/display-name — change your own display name. */
+export interface UpdateDisplayNameRequest {
+  displayName: string;
 }
 
 /* ---- Passkeys (WebAuthn) — an alternative to password, can coexist ---- *

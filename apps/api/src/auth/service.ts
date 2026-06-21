@@ -57,6 +57,7 @@ interface Flow {
 const SECRET_KEY = "session-secret";
 const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{2,31}$/i;
 const MIN_PASSWORD = 8;
+const MAX_DISPLAY_NAME = 64;
 const FLOW_TTL_MS = 5 * 60_000;
 const MAX_FLOWS = 1000;
 
@@ -166,27 +167,24 @@ export class AuthService {
   }
 
   /**
-   * Change a user's own login handle. Works for password- and passkey-based
-   * accounts alike — sign-in is keyed by credential id, not the username, so a
-   * passkey user can rename too (their authenticator may still display the old
-   * name, which is cosmetic only).
+   * Change a user's own display name (the human-friendly label shown in the
+   * UI). Free-form; no uniqueness constraint, and it doesn't affect sign-in.
    */
-  async changeUsername(userId: string, username: string): Promise<PublicUser> {
-    this.validateNewUsername(username);
-    const lower = username.toLowerCase();
+  async changeDisplayName(
+    userId: string,
+    displayName: string,
+  ): Promise<PublicUser> {
+    const name = displayName.trim();
+    if (name.length < 1 || name.length > MAX_DISPLAY_NAME)
+      throw new AuthError(
+        "invalid_input",
+        400,
+        `Display name must be 1–${MAX_DISPLAY_NAME} characters`,
+      );
     const user = await this.db.users.findById(userId);
     if (!user) throw new AuthError("invalid_input", 404, "User not found");
-    if (lower !== user.username) {
-      const existing = await this.db.users.findByUsername(lower);
-      if (existing && existing.id !== userId)
-        throw new AuthError("username_taken", 409, "Username is taken");
-      try {
-        await this.db.users.setUsername(userId, lower);
-      } catch {
-        // Unique-constraint race between the check and the update.
-        throw new AuthError("username_taken", 409, "Username is taken");
-      }
-    }
+    if (name !== user.displayName)
+      await this.db.users.setDisplayName(userId, name);
     const updated = (await this.db.users.findById(userId)) ?? user;
     return toPublicUser(updated);
   }

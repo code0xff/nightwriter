@@ -86,11 +86,13 @@ export async function setUserActive(id: string, active: boolean): Promise<void> 
 
 /* ------------------------------ account ------------------------------- */
 
-/** Change your own login handle. Returns the updated user. */
-export async function updateUsername(username: string): Promise<PublicUser> {
-  const res = await request<{ user: PublicUser }>("/api/account/username", {
+/** Change your own display name. Returns the updated user. */
+export async function updateDisplayName(
+  displayName: string,
+): Promise<PublicUser> {
+  const res = await request<{ user: PublicUser }>("/api/account/display-name", {
     method: "POST",
-    body: JSON.stringify({ username }),
+    body: JSON.stringify({ displayName }),
   });
   return res.user;
 }

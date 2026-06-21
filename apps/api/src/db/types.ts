@@ -42,8 +42,8 @@ export interface UserRepository {
   /** Returns false if the user doesn't exist or is an admin. */
   setStatus(userId: string, status: UserStatus): Promise<boolean>;
   setPassword(userId: string, passwordHash: string): Promise<void>;
-  /** Change the (unique) login handle. Throws if the username is taken. */
-  setUsername(userId: string, username: string): Promise<void>;
+  /** Change the free-form display name (no uniqueness constraint). */
+  setDisplayName(userId: string, displayName: string): Promise<void>;
 }
 
 export interface HistoryRepository {
