@@ -13,10 +13,10 @@
 .nw-progress-indeterminate {
   position: absolute;
   inset: 0;
-  width: 22%;
+  width: 28%;
   border-radius: 9999px;
   background: hsl(var(--primary));
-  animation: nw-indeterminate 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation: nw-indeterminate 2.4s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
