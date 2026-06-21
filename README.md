@@ -106,7 +106,7 @@ All `/api/generate/*` and `/api/history/*` require a session token
 | Var | Default | |
 |-----|---------|-|
 | `PORT` | `8787` | |
-| `HOST` | `127.0.0.1` | |
+| `HOST` | `127.0.0.1` | bind address; set `0.0.0.0` to expose on the LAN (see note) |
 | `CORS_ORIGIN` | `http://localhost:5173` | restrict who can drive local CLIs |
 | `NIGHTWRITER_MAX_CONCURRENCY` | `2` | concurrent CLI subprocesses; excess queued |
 | `NIGHTWRITER_JOB_TIMEOUT_MS` | `120000` | per-job subprocess timeout |
@@ -129,3 +129,24 @@ All `/api/generate/*` and `/api/history/*` require a session token
 - Artifacts are written only inside a per-job tmp dir; paths are traversal-guarded.
 - Subprocesses are time-limited and cancelable (SIGKILL).
 - Log lines are masked for common secret patterns before streaming/logging.
+
+### Network exposure
+
+The server binds to `127.0.0.1` by default — it runs local CLIs with your
+authenticated credentials, so it stays loopback-only unless you opt in. To reach
+it from other machines on the LAN:
+
+```bash
+# API on all interfaces
+HOST=0.0.0.0 pnpm --filter @nightwriter/api dev
+# Vite dev server on all interfaces
+pnpm --filter @nightwriter/web exec vite --host 0.0.0.0
+```
+
+Then open `http://<this-host-ip>:5173`. Caveats over the network:
+
+- **Admin password login works** over a LAN IP (the web server proxies `/api`).
+- **Passkeys do not work over a LAN IP or plain HTTP.** WebAuthn needs a secure
+  context (only `localhost` is exempt over HTTP) and the page host must match
+  `NIGHTWRITER_RP_ID`. For remote passkeys, serve over **HTTPS with a real
+  hostname** and set `NIGHTWRITER_RP_ID` / `NIGHTWRITER_ORIGIN` accordingly.
