@@ -5,6 +5,8 @@ import {
   Menu,
   Moon,
   PackageOpen,
+  PanelLeft,
+  PanelLeftClose,
   PenLine,
   Radio,
   ShieldCheck,
@@ -118,6 +120,16 @@ function AppShell(props: {
   const { user, dark, onToggleTheme, onLogout } = props;
   const [view, setView] = useState<View>("generate");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem("nw_sidebar_collapsed") === "1",
+  );
+
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      const next = !c;
+      localStorage.setItem("nw_sidebar_collapsed", next ? "1" : "0");
+      return next;
+    });
 
   const nav: NavItem[] = [
     { id: "generate", label: "Generate", icon: <Sparkles className="size-4" />, show: true },
@@ -130,7 +142,10 @@ function AppShell(props: {
     setDrawerOpen(false);
   };
 
-  const sidebar = (extra?: string) => (
+  const sidebar = (
+    extra: string,
+    opts?: { collapsed?: boolean; onToggleCollapse?: () => void },
+  ) => (
     <Sidebar
       className={extra}
       nav={nav}
@@ -140,13 +155,18 @@ function AppShell(props: {
       dark={dark}
       onToggleTheme={onToggleTheme}
       onLogout={onLogout}
+      collapsed={opts?.collapsed}
+      onToggleCollapse={opts?.onToggleCollapse}
     />
   );
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       {/* Desktop sidebar */}
-      {sidebar("hidden md:flex md:sticky md:top-0 md:h-screen")}
+      {sidebar("hidden md:flex md:sticky md:top-0 md:h-screen", {
+        collapsed,
+        onToggleCollapse: toggleCollapsed,
+      })}
 
       {/* Mobile drawer */}
       {drawerOpen && (
@@ -201,18 +221,55 @@ function Sidebar(props: {
   dark: boolean;
   onToggleTheme: () => void;
   onLogout: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }) {
-  const { className, nav, view, onSelect, user, dark, onToggleTheme, onLogout } =
-    props;
+  const {
+    className,
+    nav,
+    view,
+    onSelect,
+    user,
+    dark,
+    onToggleTheme,
+    onLogout,
+    collapsed = false,
+    onToggleCollapse,
+  } = props;
+
   return (
     <aside
       className={cn(
-        "z-50 flex w-56 flex-col border-r border-border bg-card/30",
+        "z-50 flex flex-col border-r border-border bg-card/30 transition-[width]",
+        collapsed ? "w-14" : "w-56",
         className,
       )}
     >
-      <div className="flex h-12 shrink-0 items-center border-b border-border px-4">
-        <Brand />
+      <div
+        className={cn(
+          "flex h-12 shrink-0 items-center gap-2 border-b border-border px-3",
+          collapsed && "justify-center",
+        )}
+      >
+        {!collapsed && <Brand />}
+        {onToggleCollapse && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className={cn(
+              "inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground",
+              !collapsed && "ml-auto",
+            )}
+          >
+            {collapsed ? (
+              <PanelLeft className="size-4" />
+            ) : (
+              <PanelLeftClose className="size-4" />
+            )}
+          </button>
+        )}
       </div>
 
       <nav className="flex-1 space-y-1 p-2">
@@ -223,44 +280,54 @@ function Sidebar(props: {
               key={n.id}
               type="button"
               onClick={() => onSelect(n.id)}
+              title={collapsed ? n.label : undefined}
               className={cn(
-                "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-xs transition-colors",
+                "flex w-full items-center rounded-md py-2 text-xs transition-colors",
+                collapsed ? "justify-center px-0" : "gap-2.5 px-3",
                 view === n.id
                   ? "bg-secondary font-medium text-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >
               {n.icon}
-              {n.label}
+              {!collapsed && n.label}
             </button>
           ))}
       </nav>
 
-      <div className="space-y-2 border-t border-border p-3">
-        <div className="px-1">
-          <div className="truncate text-xs font-medium">{user.displayName}</div>
-          <div className="text-[11px] capitalize text-muted-foreground">
-            {user.role}
+      <div
+        className={cn("space-y-2 border-t border-border", collapsed ? "p-2" : "p-3")}
+      >
+        {!collapsed && (
+          <div className="px-1">
+            <div className="truncate text-xs font-medium">
+              {user.displayName}
+            </div>
+            <div className="text-[11px] capitalize text-muted-foreground">
+              {user.role}
+            </div>
           </div>
-        </div>
-        <div className="flex gap-1">
+        )}
+        <div className={cn("flex gap-1", collapsed && "flex-col")}>
           <Button
             size="sm"
             variant="ghost"
-            className="flex-1 justify-start"
+            className={cn(collapsed ? "justify-center px-0" : "flex-1 justify-start")}
             onClick={onToggleTheme}
+            title="Toggle theme"
           >
             {dark ? <Sun /> : <Moon />}
-            Theme
+            {!collapsed && "Theme"}
           </Button>
           <Button
             size="sm"
             variant="ghost"
-            className="flex-1 justify-start"
+            className={cn(collapsed ? "justify-center px-0" : "flex-1 justify-start")}
             onClick={onLogout}
+            title="Log out"
           >
             <LogOut />
-            Logout
+            {!collapsed && "Logout"}
           </Button>
         </div>
       </div>
