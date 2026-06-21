@@ -181,10 +181,12 @@ function PasswordCard() {
               onChange={(e) => setNext(e.target.value)}
             />
           </div>
-          <Button type="submit" disabled={busy || !current || next.length < 8}>
-            {busy ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
-            Update password
-          </Button>
+          <div className="flex justify-end">
+            <Button type="submit" disabled={busy || !current || next.length < 8}>
+              {busy ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
+              Update password
+            </Button>
+          </div>
           {msg && (
             <Alert variant={msg.ok ? "success" : "destructive"}>
               <AlertDescription>{msg.text}</AlertDescription>
