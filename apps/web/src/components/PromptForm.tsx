@@ -1,5 +1,13 @@
 import { useMemo, useState } from "react";
-import { Sparkles } from "lucide-react";
+import {
+  Bot,
+  Boxes,
+  Check,
+  Feather,
+  PawPrint,
+  Sparkles,
+  Terminal,
+} from "lucide-react";
 import type { GenerateRequest, GeneratorCli, Target } from "@nightwriter/shared";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +28,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { GENERATORS, TARGET_OPTIONS, generatorById } from "@/lib/catalog";
+
+const TARGET_ICONS: Record<Target, typeof Bot> = {
+  claude: Bot,
+  codex: Terminal,
+  openclaw: PawPrint,
+  hermes: Feather,
+  adk: Boxes,
+};
 
 interface Props {
   disabled?: boolean;
@@ -109,20 +125,39 @@ export function PromptForm({ disabled, onSubmit }: Props) {
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {TARGET_OPTIONS.map((t) => {
               const active = t.id === target;
+              const Icon = TARGET_ICONS[t.id];
               return (
                 <button
                   key={t.id}
                   type="button"
                   disabled={disabled}
                   onClick={() => setTarget(t.id)}
+                  aria-pressed={active}
                   className={cn(
-                    "rounded-md border border-input bg-card px-3 py-2 text-left transition-colors",
-                    "hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50",
-                    active && "border-primary ring-1 ring-ring",
+                    "group relative rounded-md border bg-card px-3 py-2.5 text-left transition-colors",
+                    "hover:border-foreground/30 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50",
+                    active
+                      ? "border-primary ring-1 ring-ring"
+                      : "border-input",
                   )}
                 >
-                  <div className="text-xs font-medium">{t.label}</div>
-                  <div className="text-[11px] text-muted-foreground">
+                  {active && (
+                    <span className="absolute right-2 top-2 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      <Check className="size-3" />
+                    </span>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Icon
+                      className={cn(
+                        "size-4 shrink-0",
+                        active
+                          ? "text-foreground"
+                          : "text-muted-foreground group-hover:text-foreground",
+                      )}
+                    />
+                    <span className="text-xs font-medium">{t.label}</span>
+                  </div>
+                  <div className="mt-1 text-[11px] leading-snug text-muted-foreground">
                     {t.description}
                   </div>
                 </button>
