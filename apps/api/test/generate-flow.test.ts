@@ -128,6 +128,17 @@ describe("generate flow", () => {
     });
     expect(reDl.statusCode).toBe(200);
     expect(reDl.rawPayload.subarray(0, 2).toString("latin1")).toBe("PK");
+
+    // the detail endpoint includes the generated definition text
+    const detail = await built.app.inject({
+      url: `/api/history/${jobId}`,
+      headers: auth(),
+    });
+    const item = (
+      detail.json() as { item: { definition?: string; definitionFile?: string } }
+    ).item;
+    expect(item.definitionFile).toBe("agent.md");
+    expect(item.definition).toContain("test-agent");
   });
 
   it("returns 400 on invalid target", async () => {

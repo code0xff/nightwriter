@@ -3,6 +3,8 @@ import type {
   ErrorEvent as GenErrorEvent,
   GenerateRequest,
   GenerateResponse,
+  HistoryItem,
+  HistoryItemResponse,
   HistoryListResponse,
   JobStatus,
   LogEvent,
@@ -134,6 +136,11 @@ export function streamJob(jobId: string, handlers: StreamHandlers): () => void {
 
 export function listHistory(): Promise<HistoryListResponse> {
   return request<HistoryListResponse>("/api/history");
+}
+
+export async function getHistoryItem(id: string): Promise<HistoryItem> {
+  const res = await request<HistoryItemResponse>(`/api/history/${id}`);
+  return res.item;
 }
 
 export function historyDownloadUrl(id: string): string {

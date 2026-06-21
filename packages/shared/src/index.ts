@@ -213,8 +213,19 @@ export interface HistoryItem {
   files: string[];
   sizeBytes: number;
   createdAt: number;
+  /**
+   * The generated definition text (e.g. agent.md contents). Populated on the
+   * single-item detail endpoint; omitted from list responses to keep them light.
+   */
+  definition?: string;
+  /** Root filename of the definition in the zip (e.g. "agent.md"). */
+  definitionFile?: string;
 }
 
 export interface HistoryListResponse {
   items: HistoryItem[];
+}
+
+export interface HistoryItemResponse {
+  item: HistoryItem;
 }

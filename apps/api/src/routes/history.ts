@@ -1,6 +1,9 @@
 import { createReadStream } from "node:fs";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import type { HistoryListResponse } from "@nightwriter/shared";
+import type {
+  HistoryItemResponse,
+  HistoryListResponse,
+} from "@nightwriter/shared";
 import type { HistoryStore } from "../history/store.js";
 import { pathExists } from "../util/tmp.js";
 import type { Guards } from "../auth/guards.js";
@@ -22,6 +25,18 @@ export function registerHistoryRoutes(
     };
     return reply.send(res);
   });
+
+  app.get(
+    "/api/history/:id",
+    authed,
+    async (req: FastifyRequest<{ Params: IdParams }>, reply) => {
+      const item = await history.get(req.params.id);
+      if (!item || item.ownerId !== req.user!.id)
+        return reply.code(404).send({ error: "not found" });
+      const res: HistoryItemResponse = { item };
+      return reply.send(res);
+    },
+  );
 
   app.get(
     "/api/history/:id/download",

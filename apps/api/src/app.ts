@@ -47,6 +47,8 @@ export async function buildApp(
       slug: record.slug,
       files: record.files,
       zipPath: record.zipPath,
+      definition: record.definition,
+      definitionFile: record.definitionFile,
     });
   });
   store.start();

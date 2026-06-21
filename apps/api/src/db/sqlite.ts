@@ -75,6 +75,8 @@ interface HistoryRow {
   files: string;
   size_bytes: number;
   created_at: number;
+  definition: string | null;
+  definition_file: string | null;
 }
 
 function migrate(db: DB): void {
@@ -85,6 +87,15 @@ function migrate(db: DB): void {
     db.transaction(() => {
       db.exec(SCHEMA_V1);
       db.pragma("user_version = 1");
+    })();
+  }
+  if (version < 2) {
+    db.transaction(() => {
+      db.exec(
+        `ALTER TABLE history ADD COLUMN definition TEXT;
+         ALTER TABLE history ADD COLUMN definition_file TEXT;`,
+      );
+      db.pragma("user_version = 2");
     })();
   }
 }
@@ -226,8 +237,8 @@ class SqliteUsers implements UserRepository {
 class SqliteHistory implements HistoryRepository {
   constructor(private readonly db: DB) {}
 
-  private toItem(row: HistoryRow): HistoryItem {
-    return {
+  private toItem(row: HistoryRow, withDefinition = false): HistoryItem {
+    const item: HistoryItem = {
       id: row.id,
       ownerId: row.owner_id,
       prompt: row.prompt,
@@ -237,17 +248,21 @@ class SqliteHistory implements HistoryRepository {
       files: JSON.parse(row.files) as string[],
       sizeBytes: row.size_bytes,
       createdAt: row.created_at,
+      definitionFile: row.definition_file ?? undefined,
     };
+    if (withDefinition) item.definition = row.definition ?? undefined;
+    return item;
   }
 
   async upsert(item: HistoryItem): Promise<void> {
     this.db
       .prepare(
-        `INSERT INTO history (id, owner_id, prompt, generator, target, slug, files, size_bytes, created_at)
-         VALUES (@id, @ownerId, @prompt, @generator, @target, @slug, @files, @sizeBytes, @createdAt)
+        `INSERT INTO history (id, owner_id, prompt, generator, target, slug, files, size_bytes, created_at, definition, definition_file)
+         VALUES (@id, @ownerId, @prompt, @generator, @target, @slug, @files, @sizeBytes, @createdAt, @definition, @definitionFile)
          ON CONFLICT(id) DO UPDATE SET
            prompt=@prompt, generator=@generator, target=@target, slug=@slug,
-           files=@files, size_bytes=@sizeBytes, created_at=@createdAt`,
+           files=@files, size_bytes=@sizeBytes, created_at=@createdAt,
+           definition=@definition, definition_file=@definitionFile`,
       )
       .run({
         id: item.id,
@@ -259,13 +274,17 @@ class SqliteHistory implements HistoryRepository {
         files: JSON.stringify(item.files),
         sizeBytes: item.sizeBytes,
         createdAt: item.createdAt,
+        definition: item.definition ?? null,
+        definitionFile: item.definitionFile ?? null,
       });
   }
 
   async listByOwner(ownerId: string): Promise<HistoryItem[]> {
+    // Exclude the (potentially large) definition column from list payloads.
     const rows = this.db
       .prepare(
-        "SELECT * FROM history WHERE owner_id = ? ORDER BY created_at DESC",
+        `SELECT id, owner_id, prompt, generator, target, slug, files, size_bytes, created_at, definition_file, NULL AS definition
+         FROM history WHERE owner_id = ? ORDER BY created_at DESC`,
       )
       .all(ownerId) as HistoryRow[];
     return rows.map((r) => this.toItem(r));
@@ -275,7 +294,7 @@ class SqliteHistory implements HistoryRepository {
     const row = this.db.prepare("SELECT * FROM history WHERE id = ?").get(id) as
       | HistoryRow
       | undefined;
-    return row ? this.toItem(row) : undefined;
+    return row ? this.toItem(row, true) : undefined;
   }
 
   async delete(id: string, ownerId: string): Promise<boolean> {

@@ -15,6 +15,9 @@ export interface PersistInput {
   files: string[];
   /** Path to the freshly built zip in the (transient) job workspace. */
   zipPath: string;
+  /** Primary generated definition text + its root filename. */
+  definition?: string;
+  definitionFile?: string;
 }
 
 /**
@@ -55,6 +58,8 @@ export class HistoryStore {
       files: input.files,
       sizeBytes: size,
       createdAt: Date.now(),
+      definition: input.definition,
+      definitionFile: input.definitionFile,
     };
     await this.repo.upsert(item);
     logger.info("persisted history item", { id: item.id });

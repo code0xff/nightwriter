@@ -65,7 +65,13 @@ export function createRunner(
     const bytes = await createZip(job.zipPath, artifacts);
     sink.log("info", `Created artifact.zip (${bytes} bytes)`);
 
-    return { files: artifacts.map((a) => a.path) };
+    // The factory emits the definition as the first artifact.
+    const definitionArtifact = artifacts[0];
+    return {
+      files: artifacts.map((a) => a.path),
+      definition: definitionArtifact?.content ?? raw,
+      definitionFile: definitionArtifact?.path ?? "agent.md",
+    };
   };
 }
 

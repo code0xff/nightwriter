@@ -31,6 +31,8 @@ export interface JobRecord {
   error?: string;
   errorCode?: GenerateErrorCode;
   files: string[];
+  definition?: string;
+  definitionFile?: string;
   workDir: string;
   outDir: string;
   zipPath: string;
@@ -58,6 +60,10 @@ export interface JobSink {
 
 export interface RunnerResult {
   files: string[];
+  /** The primary generated definition text (e.g. agent.md contents). */
+  definition: string;
+  /** Root filename of the definition (e.g. "agent.md"). */
+  definitionFile: string;
 }
 
 /** The work function that turns a job into artifacts. */

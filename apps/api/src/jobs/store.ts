@@ -226,6 +226,8 @@ export class JobStore {
         return;
       }
       record.files = result.files;
+      record.definition = result.definition;
+      record.definitionFile = result.definitionFile;
       record.downloadReady = true;
       record.state = "succeeded";
       record.stage = "ready";
