@@ -20,6 +20,12 @@ SSE, and zips the result.
 - `apps/web` — Vite + React + Tailwind + shadcn/ui frontend.
 - `packages/shared` — API contract types shared by both.
 
+The frontend uses the shared design system from
+[code0xff/design](https://github.com/code0xff/design) — a compact, neutral,
+dark-mode-ready dev-tool look (Pretendard / JetBrains Mono, `success`/`warning`/
+`info` tokens). The `src/components/ui/*`, `tailwind.config.js`, `postcss.config.js`,
+and `src/index.css` files originate from that repo.
+
 ## Develop
 
 Node ≥ 22.13 (required by pnpm 11) and pnpm.
