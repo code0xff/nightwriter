@@ -2,6 +2,7 @@ import { type ReactNode, useCallback, useRef, useState } from "react";
 import {
   FileClock,
   LogOut,
+  Menu,
   Moon,
   PackageOpen,
   PenLine,
@@ -18,6 +19,7 @@ import type {
   JobStage,
   JobState,
   LogEvent,
+  PublicUser,
 } from "@nightwriter/shared";
 import { Button } from "@/components/ui/button";
 import { AdminPage } from "@/components/AdminPage";
@@ -57,101 +59,174 @@ export default function App() {
       </div>
     );
 
-  return (
-    <div className="relative min-h-screen bg-background text-foreground">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-gradient-to-b from-muted/40 to-transparent"
-      />
-      <Header
-        authed={!!user}
-        isAdmin={user?.role === "admin"}
-        displayName={user?.displayName}
-        dark={dark}
-        onToggleTheme={toggleTheme}
-        onLogout={logout}
-      />
-      {!user ? (
+  if (!user)
+    return (
+      <div className="relative min-h-screen bg-background text-foreground">
+        <BackgroundGlow />
+        <header className="sticky top-0 z-20 border-b border-border/70 bg-background/80 backdrop-blur">
+          <div className="container flex h-12 items-center justify-between">
+            <Brand />
+            <Button size="sm" variant="ghost" onClick={toggleTheme} aria-label="Toggle theme">
+              {dark ? <Sun /> : <Moon />}
+            </Button>
+          </div>
+        </header>
         <main className="container relative z-10 max-w-3xl py-6">
           <LoginScreen />
         </main>
-      ) : (
-        <Workspace isAdmin={user.role === "admin"} />
-      )}
+      </div>
+    );
+
+  return (
+    <AppShell user={user} dark={dark} onToggleTheme={toggleTheme} onLogout={logout} />
+  );
+}
+
+function Brand() {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
+        <PenLine className="size-3.5" />
+      </span>
+      <span className="text-sm font-semibold tracking-tight">Nightwriter</span>
     </div>
   );
 }
 
-function Header(props: {
-  authed: boolean;
-  isAdmin: boolean;
-  displayName?: string;
+function BackgroundGlow() {
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-gradient-to-b from-muted/40 to-transparent"
+    />
+  );
+}
+
+interface NavItem {
+  id: View;
+  label: string;
+  icon: ReactNode;
+  show: boolean;
+}
+
+function AppShell(props: {
+  user: PublicUser;
   dark: boolean;
   onToggleTheme: () => void;
   onLogout: () => void;
 }) {
+  const { user, dark, onToggleTheme, onLogout } = props;
+  const [view, setView] = useState<View>("generate");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const nav: NavItem[] = [
+    { id: "generate", label: "Generate", icon: <Sparkles className="size-4" />, show: true },
+    { id: "history", label: "History", icon: <FileClock className="size-4" />, show: true },
+    { id: "admin", label: "Admin", icon: <Users className="size-4" />, show: user.role === "admin" },
+  ];
+
+  const select = (v: View) => {
+    setView(v);
+    setDrawerOpen(false);
+  };
+
+  const sidebar = (extra?: string) => (
+    <Sidebar
+      className={extra}
+      nav={nav}
+      view={view}
+      onSelect={select}
+      user={user}
+      dark={dark}
+      onToggleTheme={onToggleTheme}
+      onLogout={onLogout}
+    />
+  );
+
   return (
-    <header className="sticky top-0 z-20 border-b border-border/70 bg-background/80 backdrop-blur">
-      <div className="container flex h-12 items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <PenLine className="size-3.5" />
-          </span>
-          <span className="text-sm font-semibold tracking-tight">Nightwriter</span>
+    <div className="flex min-h-screen bg-background text-foreground">
+      {/* Desktop sidebar */}
+      {sidebar("hidden md:flex md:sticky md:top-0 md:h-screen")}
+
+      {/* Mobile drawer */}
+      {drawerOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div
+            className="absolute inset-0 bg-black/50 duration-200 animate-in fade-in"
+            onClick={() => setDrawerOpen(false)}
+          />
+          {sidebar(
+            "absolute inset-y-0 left-0 w-64 bg-background shadow-xl duration-200 animate-in slide-in-from-left",
+          )}
         </div>
-        <div className="flex items-center gap-2">
-          {props.authed && props.displayName && (
-            <span className="hidden text-[11px] text-muted-foreground sm:inline">
-              {props.displayName}
-            </span>
-          )}
-          {props.authed && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={props.onLogout}
-              aria-label="Log out"
-            >
-              <LogOut />
-            </Button>
-          )}
+      )}
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile top bar */}
+        <header className="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-border bg-background/80 px-3 backdrop-blur md:hidden">
           <Button
             size="sm"
             variant="ghost"
-            onClick={props.onToggleTheme}
-            aria-label="Toggle theme"
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Open menu"
           >
-            {props.dark ? <Sun /> : <Moon />}
+            <Menu />
           </Button>
-        </div>
+          <Brand />
+        </header>
+
+        <main className="relative flex-1">
+          <BackgroundGlow />
+          <div className="container relative z-10 max-w-3xl space-y-5 py-6">
+            {view === "generate" && <Generator />}
+            {view === "history" && <HistoryPanel />}
+            {view === "admin" && user.role === "admin" && <AdminPage />}
+            <footer className="pt-2 text-center text-[11px] text-muted-foreground">
+              Definitions are produced by a real CLI subprocess in an isolated,
+              path-guarded workspace.
+            </footer>
+          </div>
+        </main>
       </div>
-    </header>
+    </div>
   );
 }
 
-function Workspace({ isAdmin }: { isAdmin: boolean }) {
-  const [view, setView] = useState<View>("generate");
-
-  const nav: { id: View; label: string; icon: ReactNode; show: boolean }[] = [
-    { id: "generate", label: "Generate", icon: <Sparkles className="size-3.5" />, show: true },
-    { id: "history", label: "History", icon: <FileClock className="size-3.5" />, show: true },
-    { id: "admin", label: "Admin", icon: <Users className="size-3.5" />, show: isAdmin },
-  ];
-
+function Sidebar(props: {
+  className?: string;
+  nav: NavItem[];
+  view: View;
+  onSelect: (v: View) => void;
+  user: PublicUser;
+  dark: boolean;
+  onToggleTheme: () => void;
+  onLogout: () => void;
+}) {
+  const { className, nav, view, onSelect, user, dark, onToggleTheme, onLogout } =
+    props;
   return (
-    <main className="container relative z-10 max-w-3xl space-y-5 py-6">
-      <nav className="flex flex-wrap gap-1">
+    <aside
+      className={cn(
+        "z-50 flex w-56 flex-col border-r border-border bg-card/30",
+        className,
+      )}
+    >
+      <div className="flex h-12 shrink-0 items-center border-b border-border px-4">
+        <Brand />
+      </div>
+
+      <nav className="flex-1 space-y-1 p-2">
         {nav
           .filter((n) => n.show)
           .map((n) => (
             <button
               key={n.id}
               type="button"
-              onClick={() => setView(n.id)}
+              onClick={() => onSelect(n.id)}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors",
+                "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-xs transition-colors",
                 view === n.id
-                  ? "bg-secondary text-foreground"
+                  ? "bg-secondary font-medium text-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >
@@ -161,15 +236,35 @@ function Workspace({ isAdmin }: { isAdmin: boolean }) {
           ))}
       </nav>
 
-      {view === "generate" && <Generator />}
-      {view === "history" && <HistoryPanel />}
-      {view === "admin" && isAdmin && <AdminPage />}
-
-      <footer className="pt-2 text-center text-[11px] text-muted-foreground">
-        Definitions are produced by a real CLI subprocess in an isolated,
-        path-guarded workspace.
-      </footer>
-    </main>
+      <div className="space-y-2 border-t border-border p-3">
+        <div className="px-1">
+          <div className="truncate text-xs font-medium">{user.displayName}</div>
+          <div className="text-[11px] capitalize text-muted-foreground">
+            {user.role}
+          </div>
+        </div>
+        <div className="flex gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="flex-1 justify-start"
+            onClick={onToggleTheme}
+          >
+            {dark ? <Sun /> : <Moon />}
+            Theme
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="flex-1 justify-start"
+            onClick={onLogout}
+          >
+            <LogOut />
+            Logout
+          </Button>
+        </div>
+      </div>
+    </aside>
   );
 }
 
