@@ -1,13 +1,5 @@
 import { useMemo, useState } from "react";
-import {
-  Bot,
-  Boxes,
-  Check,
-  Feather,
-  PawPrint,
-  Sparkles,
-  Terminal,
-} from "lucide-react";
+import { Bot, Boxes, Feather, PawPrint, Sparkles, Terminal } from "lucide-react";
 import type { GenerateRequest, GeneratorCli, Target } from "@nightwriter/shared";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,7 +18,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import { GENERATORS, TARGET_OPTIONS, generatorById } from "@/lib/catalog";
 
 const TARGET_ICONS: Record<Target, typeof Bot> = {
@@ -49,6 +40,11 @@ export function PromptForm({ disabled, onSubmit }: Props) {
   const [target, setTarget] = useState<Target>("claude");
 
   const generator = useMemo(() => generatorById(cli), [cli]);
+  const activeTarget = useMemo(
+    () => TARGET_OPTIONS.find((t) => t.id === target) ?? TARGET_OPTIONS[0]!,
+    [target],
+  );
+  const TargetIcon = TARGET_ICONS[target];
 
   const handleCli = (next: string) => {
     const g = generatorById(next as GeneratorCli);
@@ -122,48 +118,37 @@ export function PromptForm({ disabled, onSubmit }: Props) {
 
         <div className="space-y-1.5">
           <Label>Target runtime</Label>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {TARGET_OPTIONS.map((t) => {
-              const active = t.id === target;
-              const Icon = TARGET_ICONS[t.id];
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => setTarget(t.id)}
-                  aria-pressed={active}
-                  className={cn(
-                    "group relative rounded-md border bg-card px-3 py-2.5 text-left transition-colors",
-                    "hover:border-foreground/30 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50",
-                    active
-                      ? "border-primary ring-1 ring-ring"
-                      : "border-input",
-                  )}
-                >
-                  {active && (
-                    <span className="absolute right-2 top-2 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                      <Check className="size-3" />
+          <Select
+            value={target}
+            onValueChange={(v) => setTarget(v as Target)}
+            disabled={disabled}
+          >
+            <SelectTrigger>
+              <span className="flex min-w-0 items-center gap-2">
+                <TargetIcon className="size-4 shrink-0 text-muted-foreground" />
+                <span className="truncate">{activeTarget.label}</span>
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              {TARGET_OPTIONS.map((t) => {
+                const Icon = TARGET_ICONS[t.id];
+                return (
+                  <SelectItem key={t.id} value={t.id}>
+                    <span className="flex items-center gap-2">
+                      <Icon className="size-4 shrink-0 text-muted-foreground" />
+                      {t.label}
+                      <span className="ml-1 hidden text-[11px] text-muted-foreground sm:inline">
+                        {t.description}
+                      </span>
                     </span>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <Icon
-                      className={cn(
-                        "size-4 shrink-0",
-                        active
-                          ? "text-foreground"
-                          : "text-muted-foreground group-hover:text-foreground",
-                      )}
-                    />
-                    <span className="text-xs font-medium">{t.label}</span>
-                  </div>
-                  <div className="mt-1 text-[11px] leading-snug text-muted-foreground">
-                    {t.description}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            {activeTarget.description}
+          </p>
         </div>
 
         <div className="flex flex-col pt-1 sm:flex-row sm:justify-end">
