@@ -19,3 +19,6 @@ tmp/
 # persistent app data (users, history, artifacts, session secret)
 data/
 apps/api/data/
+
+# codex review output
+.codex-review.md

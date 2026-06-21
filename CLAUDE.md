@@ -112,6 +112,12 @@ pnpm verify                                # full CI-equivalent gate locally
   (e.g. `feat(api): …`, `fix: …`, `ci: …`, `docs: …`, `chore(web): …`). Commit
   per feature unit after the gate passes. End each commit message with:
   `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
+- **Codex review on completion:** when a feature / development unit is complete,
+  **commit it, then run `pnpm review` _before pushing_** (so the local commits
+  are what gets reviewed — `scripts/codex-review.sh` diffs `origin/dev...HEAD`).
+  It's a read-only Codex review; read the report (`.codex-review.md`), fix any
+  CRITICAL/HIGH findings, re-run the gate, then push. (Already pushed? pass an
+  explicit base, e.g. `pnpm review HEAD~3`.)
 - **CI:** `.github/workflows/ci.yml`, triggers on push/PR to `dev`, Node 22.
 - **Security (must preserve):** spawn CLIs with array argv (`spawn(cmd, [args])`)
   — never a shell, no string interpolation of prompts. Write artifacts only

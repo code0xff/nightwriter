@@ -16,6 +16,7 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "verify": "bash scripts/ci-check.sh",
+    "review": "bash scripts/codex-review.sh",
     "prepare": "git config core.hooksPath .githooks || true"
   }
 }
