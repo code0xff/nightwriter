@@ -37,10 +37,21 @@ for several runtimes (Claude / Codex / OpenClaw / Hermes / ADK).
     replay, TTL cleanup).
   - `src/generate/` — `spawn.ts` (subprocess + error mapping) and `runner.ts`
     (prompt → spawn → parse → zip).
-  - `src/routes/` — HTTP + SSE endpoints; `validate.ts` validates request bodies.
+  - `src/db/` — **storage abstraction**: async `UserRepository` /
+    `HistoryRepository` / `SettingsRepository` interfaces (`types.ts`) + a
+    `better-sqlite3` backend (`sqlite.ts`, WAL + `user_version` migrations) +
+    `openDatabase()` factory (`index.ts`) switchable to Postgres. **Swap/add a
+    backend here; don't bypass the interfaces.**
+  - `src/auth/` — `crypto.ts` (scrypt passwords, HMAC session tokens),
+    `users.ts` (mappers + admin seeding), `service.ts` (admin login + passkey
+    ceremonies via @simplewebauthn/server), `guards.ts` (Fastify preHandlers).
+  - `src/history/` — `store.ts`: durable history (metadata via repo, zip
+    artifacts on disk under `<dataRoot>/artifacts`).
+  - `src/routes/` — HTTP + SSE endpoints; `auth.ts`/`admin.ts`/`history.ts`/
+    `generate.ts`; `validate.ts` validates request bodies.
   - `src/util/` — `logger.ts` (secret masking), `sse.ts`, `tmp.ts` (path-guard),
     `ids.ts`.
-  - `app.ts` builds the Fastify instance + store (used by tests); `index.ts` listens.
+  - `app.ts` builds the Fastify instance + DB + stores (used by tests); `index.ts` listens.
   - `test/` — vitest; `fixtures/fake-cli.mjs` is a deterministic stand-in CLI.
 - `apps/web` — Vite + React + TS + Tailwind + shadcn/ui frontend. Uses the house
   design system (compact, neutral, dark-ready; Pretendard / JetBrains Mono;
@@ -52,8 +63,25 @@ for several runtimes (Claude / Codex / OpenClaw / Hermes / ADK).
   shell commands with:
   `export PATH="$HOME/.nvm/versions/node/v24.16.0/bin:$PATH"`
 - pnpm (11.8.0) comes from `corepack enable`. **pnpm 11 requires Node ≥ 22.13.**
-- esbuild's build script must be approved — `pnpm-workspace.yaml` has
-  `allowBuilds.esbuild: true` and `onlyBuiltDependencies: [esbuild]`. Don't revert.
+- Native build scripts must be approved in `pnpm-workspace.yaml`
+  (`allowBuilds` + `onlyBuiltDependencies`): currently **esbuild** and
+  **better-sqlite3**. Don't revert; add new native deps there too.
+
+## Auth, history & storage
+
+- **Access is gated.** Admin signs in with id/password (env-seeded
+  `NIGHTWRITER_ADMIN_*`, changeable in the admin page). Regular users register +
+  sign in with **passkeys** and must be **admin-activated** (`status: pending →
+  active`) before generating. Generations are **owned by the creator**; history
+  is **permanent** and owner-deletable.
+- **All `/api/generate/*` and `/api/history/*` require a session token** (Bearer
+  header, or `?token=` for SSE since EventSource can't set headers). Guards:
+  `requireAuth` → `requireActive` / `requireAdmin`.
+- **Storage is abstracted** — go through the `db/` repository interfaces (async,
+  so a Postgres backend can implement them). SQLite is the default; zip artifacts
+  stay on disk, only metadata in the DB. Tests pass `db.sqlitePath: ":memory:"`.
+- The web client holds the token in `localStorage` and injects it via
+  `setAuthToken` (`src/lib/api.ts`); `authContext.tsx` is the source of truth.
 
 ## Commands
 

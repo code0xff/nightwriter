@@ -62,15 +62,41 @@ git push --no-verify # bypass the hook in an emergency
 
 The hook falls back to the nvm-managed Node when `node`/`pnpm` aren't on PATH.
 
+## Auth & history
+
+Access is gated. An **admin** signs in with an id/password (seeded from env,
+changeable in the admin page). Everyone else **registers and signs in with a
+passkey** (WebAuthn) and must be **activated by an admin** before they can
+generate. Each generation is **owned by its creator**; history is kept
+**permanently** and is **re-downloadable and deletable by the owner**.
+
+Storage goes through a **repository abstraction** (`src/db`): async
+`UserRepository` / `HistoryRepository` / `SettingsRepository` interfaces with a
+**SQLite** (`better-sqlite3`) backend today, switchable to Postgres via
+`NIGHTWRITER_DB`. Zip artifacts live on the filesystem; only metadata is in the DB.
+
 ## API
+
+All `/api/generate/*` and `/api/history/*` require a session token
+(`Authorization: Bearer <token>`, or `?token=` for the SSE stream).
 
 | Method | Path | Notes |
 |--------|------|-------|
+| POST | `/api/auth/login` | admin id/password → `{ token, user }` |
+| GET | `/api/auth/me` | current session user |
+| POST | `/api/auth/passkey/register/start` · `/finish` | passkey sign-up (pending) |
+| POST | `/api/auth/passkey/login/start` · `/finish` | passkey sign-in |
+| GET | `/api/admin/users` | (admin) list users |
+| POST | `/api/admin/users/:id/activate` · `/deactivate` | (admin) toggle access |
+| POST | `/api/admin/password` | (admin) change password |
 | POST | `/api/generate` | `{ prompt, generator:{cli,model?}, target }` → `{ jobId }` |
 | GET | `/api/generate/:jobId/events` | SSE: `status` / `log` / `done` / `error` |
 | GET | `/api/generate/:jobId/download` | `application/zip` |
 | GET | `/api/generate/:jobId` | status snapshot (polling fallback) |
 | POST | `/api/generate/:jobId/cancel` | cancel a running/queued job |
+| GET | `/api/history` | the caller's past generations |
+| GET | `/api/history/:id/download` | re-download a past artifact (owner only) |
+| DELETE | `/api/history/:id` | delete a past generation (owner only) |
 
 `generator.cli`: `claude | codex`.
 `target`: `claude | codex | openclaw | hermes | adk`.
@@ -87,6 +113,14 @@ The hook falls back to the nvm-managed Node when `node`/`pnpm` aren't on PATH.
 | `NIGHTWRITER_ARTIFACT_TTL_MS` | `1800000` | artifact lifetime before cleanup |
 | `NIGHTWRITER_WORK_ROOT` | OS tmp | per-job isolated working dirs |
 | `NIGHTWRITER_CLAUDE_BIN` / `NIGHTWRITER_CODEX_BIN` | `claude` / `codex` | CLI overrides |
+| `NIGHTWRITER_DATA_ROOT` | `./data` | DB file + persisted zip artifacts |
+| `NIGHTWRITER_DB` | `sqlite` | storage driver (`sqlite` \| `postgres`) |
+| `NIGHTWRITER_SQLITE_PATH` | `<data>/nightwriter.db` | SQLite file |
+| `NIGHTWRITER_ADMIN_USERNAME` / `NIGHTWRITER_ADMIN_PASSWORD` | `admin` / _generated_ | seed admin (password logged once if unset) |
+| `NIGHTWRITER_SESSION_SECRET` | _generated+persisted_ | HMAC secret for session tokens |
+| `NIGHTWRITER_SESSION_TTL_MS` | `604800000` | session lifetime (7d) |
+| `NIGHTWRITER_RP_ID` / `NIGHTWRITER_RP_NAME` | `localhost` / `Nightwriter` | WebAuthn relying party |
+| `NIGHTWRITER_ORIGIN` | `http://localhost:5173,http://127.0.0.1:5173` | allowed passkey origins |
 
 ## Security notes
 
