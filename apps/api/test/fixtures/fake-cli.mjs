@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// Test double for a generator CLI (claude/codex). Ignores its argv flags,
-// reads the engineered prompt from stdin, and prints a deterministic agent
-// definition to stdout — wrapped in a code fence to exercise fence stripping.
+// Test double for a generator CLI (claude/codex). Reads the engineered prompt
+// from stdin and prints a deterministic agent definition. If invoked with
+// "stream-json" in argv (the claude adapter), it emits the streaming-JSON event
+// format; otherwise it prints plain text (the codex adapter / fallback).
 let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (d) => {
   input += d;
 });
 process.stdin.on("end", () => {
-  // Emit a couple of progress-ish lines to stderr (streamed as logs).
   process.stderr.write("thinking...\n");
-  const body = [
+  const md = [
     "```markdown",
     "---",
     "name: test-agent",
@@ -21,6 +21,31 @@ process.stdin.on("end", () => {
     "You are a test agent. The prompt length was " + input.length + " chars.",
     "```",
   ].join("\n");
-  process.stdout.write(body + "\n");
+
+  if (process.argv.includes("stream-json")) {
+    const emit = (o) => process.stdout.write(JSON.stringify(o) + "\n");
+    emit({ type: "system", subtype: "init", model: "fake-model" });
+    emit({
+      type: "stream_event",
+      event: { type: "content_block_start", content_block: { type: "thinking" } },
+    });
+    emit({
+      type: "stream_event",
+      event: { type: "content_block_delta", delta: { type: "text_delta", text: md.slice(0, 24) } },
+    });
+    emit({
+      type: "stream_event",
+      event: { type: "content_block_delta", delta: { type: "text_delta", text: md.slice(24) + "\n" } },
+    });
+    emit({
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      result: md,
+      usage: { output_tokens: 42 },
+    });
+  } else {
+    process.stdout.write(md + "\n");
+  }
   process.exit(0);
 });

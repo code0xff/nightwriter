@@ -20,10 +20,30 @@ export interface Invocation {
   env?: Record<string, string>;
 }
 
+/**
+ * Stateful parser for a CLI that emits structured streaming output (one record
+ * per stdout line). Lets adapters surface live progress logs and extract the
+ * final definition text separately.
+ */
+export interface StreamParser {
+  /** Process one stdout line; return human-readable log lines to surface. */
+  onLine(line: string): string[];
+  /** Final definition text once the stream ends ("" if none seen). */
+  result(): string;
+  /** A terminal error reported by the stream (e.g. an error result event). */
+  errorMessage?(): string | undefined;
+}
+
 export interface CliAdapter {
   readonly id: GeneratorCli;
   /** Default model used when the request omits one. */
   readonly defaultModel: string;
   /** Build a non-interactive spawn invocation for this CLI. */
   buildInvocation(ctx: InvocationContext): Invocation;
+  /**
+   * Optional: when present, the runner feeds each stdout line to the parser to
+   * get live logs and the definition. When absent, stdout is the raw definition
+   * and each stdout line is surfaced verbatim as a log.
+   */
+  createStreamParser?(): StreamParser;
 }

@@ -32,6 +32,9 @@ export function createRunner(
       cwd: job.outDir,
     });
 
+    // When the adapter emits structured streaming output, parse stdout lines
+    // into live logs + the definition; otherwise stdout is the raw definition.
+    const parser = adapter.createStreamParser?.();
     const { stdout } = await runCli({
       command: invocation.command,
       args: invocation.args,
@@ -40,10 +43,19 @@ export function createRunner(
       stdin: invocation.promptViaStdin ? enginePrompt : undefined,
       timeoutMs: config.jobTimeoutMs,
       signal: sink.signal,
-      onLine: (level, line) => sink.log(level, line),
+      onLine: (level, line) => {
+        if (parser && level === "info") {
+          for (const log of parser.onLine(line)) sink.log("info", log);
+        } else {
+          sink.log(level, line);
+        }
+      },
     });
 
-    const raw = stdout.trim();
+    const streamError = parser?.errorMessage?.();
+    if (streamError) throw new GenerateError("cli_failed", streamError);
+
+    const raw = (parser ? parser.result() : stdout).trim();
     if (!raw) {
       throw new GenerateError(
         "cli_failed",
