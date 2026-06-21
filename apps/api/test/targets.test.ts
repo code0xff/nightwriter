@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTargetPlugin } from "../src/targets/index.js";
+import { safeZipPath } from "../src/targets/factory.js";
 import { stripCodeFence } from "../src/targets/types.js";
 
 describe("stripCodeFence", () => {
@@ -50,6 +51,77 @@ describe("adk target", () => {
     const install = files.find((f) => f.path === "install.sh")!;
     expect(install.content).toContain("__init__.py");
     expect(install.content).toContain("my_agent");
+  });
+});
+
+describe("codex target", () => {
+  it("emits a TOML subagent at the root + installs into .codex/agents", () => {
+    const files = getTargetPlugin("codex").buildArtifacts('name = "x"', ctx);
+    expect(files.map((f) => f.path)).toContain("agent.toml");
+    const install = files.find((f) => f.path === "install.sh")!;
+    expect(install.content).toContain(".codex/agents");
+    expect(install.content).toContain('cp "$HERE/agent.toml"');
+  });
+});
+
+describe("hermes target", () => {
+  it("emits a SKILL.md at the root + installs into ~/.hermes/skills", () => {
+    const files = getTargetPlugin("hermes").buildArtifacts(
+      "---\nname: x\n---\nbody",
+      ctx,
+    );
+    expect(files.map((f) => f.path)).toContain("SKILL.md");
+    expect(files.find((f) => f.path === "install.sh")!.content).toContain(
+      ".hermes/skills",
+    );
+  });
+});
+
+describe("openclaw target", () => {
+  const oc = getTargetPlugin("openclaw");
+  it("splits a delimited workspace into multiple files", () => {
+    const raw = [
+      "===== FILE: AGENTS.md =====",
+      "mission",
+      "===== FILE: SOUL.md =====",
+      "persona",
+      "===== FILE: skills/x/SKILL.md =====",
+      "---\nname: x\n---\nbody",
+    ].join("\n");
+    const paths = oc.buildArtifacts(raw, ctx).map((f) => f.path);
+    expect(paths).toContain("workspace/AGENTS.md");
+    expect(paths).toContain("workspace/SOUL.md");
+    expect(paths).toContain("workspace/skills/x/SKILL.md");
+    expect(paths).toContain("install.sh");
+  });
+  it("falls back to a single AGENTS.md when there are no delimiters", () => {
+    expect(oc.buildArtifacts("just text", ctx).map((f) => f.path)).toContain(
+      "workspace/AGENTS.md",
+    );
+  });
+  it("sanitizes path traversal in generated file paths (zip-slip safe)", () => {
+    const files = oc.buildArtifacts(
+      "===== FILE: ../../etc/passwd =====\npwned",
+      ctx,
+    );
+    expect(files.every((f) => !f.path.includes(".."))).toBe(true);
+    expect(files.some((f) => f.path.startsWith("workspace/"))).toBe(true);
+  });
+  it("de-duplicates colliding generated file paths", () => {
+    const raw = "===== FILE: dup.md =====\nfirst\n===== FILE: dup.md =====\nsecond";
+    const paths = oc.buildArtifacts(raw, ctx).map((f) => f.path);
+    expect(paths).toContain("workspace/dup.md");
+    expect(paths).toContain("workspace/dup-2.md");
+  });
+});
+
+describe("safeZipPath", () => {
+  it("strips traversal, leading slashes, and unsafe chars", () => {
+    expect(safeZipPath("../../etc/passwd", "fb")).toBe("etc/passwd");
+    expect(safeZipPath("/abs/path", "fb")).toBe("abs/path");
+    expect(safeZipPath("a/b/../c", "fb")).toBe("a/b/c");
+    expect(safeZipPath("", "fb")).toBe("fb");
+    expect(safeZipPath("weird name!.md", "fb")).toBe("weird_name_.md");
   });
 });
 

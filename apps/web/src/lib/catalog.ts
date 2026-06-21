@@ -49,17 +49,17 @@ export const TARGET_OPTIONS: TargetOption[] = [
   {
     id: "codex",
     label: "Codex",
-    description: "AGENTS.md-style agent under .codex/agents/",
+    description: "TOML subagent under .codex/agents/",
   },
   {
     id: "openclaw",
     label: "OpenClaw",
-    description: "Markdown agent for the OpenClaw runtime",
+    description: "Agent workspace (AGENTS.md, SOUL.md, skills/…)",
   },
   {
     id: "hermes",
-    label: "Hermes",
-    description: "YAML agent manifest for Hermes",
+    label: "Hermes Agent",
+    description: "SKILL.md skill under ~/.hermes/skills/",
   },
   {
     id: "adk",
