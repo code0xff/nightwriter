@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Pre-push gate: run CI-equivalent checks so a push can't fail GitHub Actions.
+# Enabled via `core.hooksPath=.githooks` (set automatically by `pnpm install`).
+# Bypass in emergencies with: git push --no-verify
+set -euo pipefail
+
+echo "[pre-push] running CI-equivalent checks before pushing…"
+exec "$(git rev-parse --show-toplevel)/scripts/ci-check.sh"

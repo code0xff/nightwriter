@@ -42,6 +42,20 @@ To actually generate, the chosen CLI must be installed and on `PATH`
 pnpm --filter @nightwriter/api test    # vitest; uses a fake CLI fixture
 ```
 
+## Pre-push gate
+
+A git `pre-push` hook runs the **same checks as CI** (install → build shared →
+typecheck → test → build web) so a push can't fail GitHub Actions. It's enabled
+automatically: `pnpm install` runs a `prepare` script that points
+`core.hooksPath` at `.githooks/`.
+
+```bash
+pnpm verify          # run the gate manually (scripts/ci-check.sh)
+git push --no-verify # bypass the hook in an emergency
+```
+
+The hook falls back to the nvm-managed Node when `node`/`pnpm` aren't on PATH.
+
 ## API
 
 | Method | Path | Notes |

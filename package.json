@@ -14,6 +14,8 @@
     "dev:web": "pnpm --filter @nightwriter/web dev",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "lint": "pnpm -r lint"
+    "lint": "pnpm -r lint",
+    "verify": "bash scripts/ci-check.sh",
+    "prepare": "git config core.hooksPath .githooks || true"
   }
 }
