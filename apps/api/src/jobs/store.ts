@@ -39,6 +39,8 @@ export class JobStore {
   constructor(
     private readonly config: AppConfig,
     private readonly runner: JobRunner,
+    /** Invoked after a job succeeds (e.g. to persist it to history). */
+    private readonly onSucceeded?: (record: JobRecord) => Promise<void>,
   ) {}
 
   start(): void {
@@ -58,7 +60,7 @@ export class JobStore {
     this.jobs.clear();
   }
 
-  create(req: GenerateRequest): JobRecord {
+  create(req: GenerateRequest, ownerId: string): JobRecord {
     const id = newJobId();
     const now = Date.now();
     const slug = slugify(req.prompt);
@@ -66,6 +68,7 @@ export class JobStore {
     const model = req.generator.model ?? "";
     const record: JobRecord = {
       id,
+      ownerId,
       state: "queued",
       stage: "queued",
       prompt: req.prompt,
@@ -228,6 +231,18 @@ export class JobStore {
       record.stage = "ready";
       record.finishedAt = Date.now();
       this.touch(record);
+      // Persist to durable history before announcing completion. A persist
+      // failure must not fail the job — the live download still works.
+      if (this.onSucceeded) {
+        try {
+          await this.onSucceeded(record);
+        } catch (err) {
+          logger.error("history persist failed", {
+            jobId: record.id,
+            msg: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
       const done: DoneEvent = {
         jobId: record.id,
         downloadUrl: `/api/generate/${record.id}/download`,

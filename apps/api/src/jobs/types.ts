@@ -16,6 +16,8 @@ export interface BufferedEvent {
 
 export interface JobRecord {
   id: string;
+  /** Authenticated user the generation is attributed to. */
+  ownerId: string;
   state: JobState;
   stage: JobStage;
   prompt: string;

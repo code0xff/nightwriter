@@ -29,9 +29,34 @@ export interface AppConfig {
     claude: string;
     codex: string;
   };
+  /** Durable data root (database file + persisted artifacts). */
+  dataRoot: string;
+  /** Storage backend selection. */
+  db: {
+    driver: "sqlite" | "postgres";
+    /** SQLite file path (":memory:" for tests). */
+    sqlitePath: string;
+  };
+  /** Auth / session settings. */
+  auth: {
+    /** HMAC secret for session tokens; auto-generated + persisted if empty. */
+    sessionSecret: string;
+    sessionTtlMs: number;
+    /** Seed admin credentials (password auto-generated if empty). */
+    adminUsername: string;
+    adminPassword: string;
+  };
+  /** WebAuthn / passkey relying-party settings. */
+  webauthn: {
+    rpName: string;
+    rpID: string;
+    /** Allowed origins (comma-separated env → array). */
+    origins: string[];
+  };
 }
 
 export function loadConfig(): AppConfig {
+  const dataRoot = process.env.NIGHTWRITER_DATA_ROOT ?? path.resolve("data");
   return {
     host: process.env.HOST ?? "127.0.0.1",
     port: envInt("PORT", 8787),
@@ -50,6 +75,35 @@ export function loadConfig(): AppConfig {
     bins: {
       claude: process.env.NIGHTWRITER_CLAUDE_BIN ?? "claude",
       codex: process.env.NIGHTWRITER_CODEX_BIN ?? "codex",
+    },
+    dataRoot,
+    db: {
+      driver:
+        (process.env.NIGHTWRITER_DB as "sqlite" | "postgres" | undefined) ??
+        "sqlite",
+      sqlitePath:
+        process.env.NIGHTWRITER_SQLITE_PATH ??
+        path.join(dataRoot, "nightwriter.db"),
+    },
+    auth: {
+      sessionSecret: process.env.NIGHTWRITER_SESSION_SECRET ?? "",
+      sessionTtlMs: Math.max(
+        60_000,
+        envInt("NIGHTWRITER_SESSION_TTL_MS", 7 * 24 * 60 * 60_000),
+      ),
+      adminUsername: process.env.NIGHTWRITER_ADMIN_USERNAME ?? "admin",
+      adminPassword: process.env.NIGHTWRITER_ADMIN_PASSWORD ?? "",
+    },
+    webauthn: {
+      rpName: process.env.NIGHTWRITER_RP_NAME ?? "Nightwriter",
+      rpID: process.env.NIGHTWRITER_RP_ID ?? "localhost",
+      origins: (
+        process.env.NIGHTWRITER_ORIGIN ??
+        "http://localhost:5173,http://127.0.0.1:5173"
+      )
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
     },
   };
 }
