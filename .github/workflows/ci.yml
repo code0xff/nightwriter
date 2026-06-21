@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared types
+        run: pnpm --filter @nightwriter/shared build
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Test (api)
+        run: pnpm --filter @nightwriter/api test
+
+      - name: Build web
+        run: pnpm --filter @nightwriter/web build
