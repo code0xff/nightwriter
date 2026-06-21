@@ -22,7 +22,7 @@ SSE, and zips the result.
 
 ## Develop
 
-Node ≥ 20 and pnpm.
+Node ≥ 22.13 (required by pnpm 11) and pnpm.
 
 ```bash
 pnpm install
