@@ -12,14 +12,18 @@ export interface TargetSpec {
   displayName: string;
   /** Describes the exact artifact format the generator must emit. */
   formatInstructions: string;
-  /** Path (within the zip) where the parsed definition is written. */
-  definitionPath: (slug: string) => string;
-  /** install.sh body (without shebang; the factory prepends it). */
-  installScript: (ctx: TargetContext, definitionPath: string) => string;
+  /** Visible filename for the definition at the zip root (e.g. "agent.md"). */
+  definitionFile: string;
+  /**
+   * install.sh body (no shebang). Runs with `set -euo pipefail`; `$HERE` is the
+   * script's own directory, so it should `cp "$HERE/<definitionFile>" …` into
+   * the runtime's location.
+   */
+  installScript: (ctx: TargetContext) => string;
   /** Activation guide written to README.md. */
-  activationGuide: (ctx: TargetContext, definitionPath: string) => string;
-  /** Optional extra static files (manifests, requirements, __init__, ...). */
-  extraFiles?: (ctx: TargetContext, definition: string) => ArtifactFile[];
+  activationGuide: (ctx: TargetContext) => string;
+  /** Optional extra files placed at the zip root (manifests, requirements …). */
+  extraFiles?: (ctx: TargetContext) => ArtifactFile[];
 }
 
 const GENERATION_PROMPT = (
@@ -42,6 +46,12 @@ const GENERATION_PROMPT = (
     formatInstructions.trim(),
   ].join("\n");
 
+const INSTALL_HEADER = `#!/usr/bin/env bash
+set -euo pipefail
+# Resolve this script's own directory so it works no matter where it is run from.
+HERE="$(cd "$(dirname "\${BASH_SOURCE[0]:-$0}")" && pwd)"
+`;
+
 export function createTargetPlugin(spec: TargetSpec): TargetPlugin {
   return {
     id: spec.id,
@@ -55,20 +65,21 @@ export function createTargetPlugin(spec: TargetSpec): TargetPlugin {
     },
     buildArtifacts(rawStdout: string, ctx: TargetContext): ArtifactFile[] {
       const definition = stripCodeFence(rawStdout);
-      const defPath = spec.definitionPath(ctx.slug);
       const files: ArtifactFile[] = [
-        { path: defPath, content: ensureTrailingNewline(definition) },
+        // The definition lives at the zip root (visible) — install.sh copies it
+        // into the runtime's expected location.
+        { path: spec.definitionFile, content: ensureTrailingNewline(definition) },
         {
           path: "install.sh",
-          content: `#!/usr/bin/env bash\nset -euo pipefail\n\n${spec.installScript(ctx, defPath)}\n`,
+          content: `${INSTALL_HEADER}\n${spec.installScript(ctx)}\n`,
           mode: 0o755,
         },
         {
           path: "README.md",
-          content: ensureTrailingNewline(spec.activationGuide(ctx, defPath)),
+          content: ensureTrailingNewline(spec.activationGuide(ctx)),
         },
       ];
-      if (spec.extraFiles) files.push(...spec.extraFiles(ctx, definition));
+      if (spec.extraFiles) files.push(...spec.extraFiles(ctx));
       return files;
     },
   };

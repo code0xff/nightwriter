@@ -96,7 +96,7 @@ describe("generate flow", () => {
     const terminal = await waitForTerminal(jobId);
     expect(terminal.event).toBe("done");
     const done = terminal.data as { files: string[]; downloadUrl: string };
-    expect(done.files.some((f) => f.startsWith(".claude/agents/"))).toBe(true);
+    expect(done.files).toContain("agent.md");
     expect(done.files).toContain("install.sh");
     expect(done.files).toContain("README.md");
 

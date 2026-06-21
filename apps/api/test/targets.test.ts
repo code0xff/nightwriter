@@ -24,26 +24,32 @@ const ctx = {
 
 describe("claude target", () => {
   const plugin = getTargetPlugin("claude");
-  it("writes the definition under .claude/agents and includes install + readme", () => {
+  it("puts a visible agent.md at the root plus install + readme", () => {
     const files = plugin.buildArtifacts("```\nDEF\n```", ctx);
     const paths = files.map((f) => f.path);
-    expect(paths).toContain(".claude/agents/my-agent.md");
+    expect(paths).toContain("agent.md");
     expect(paths).toContain("install.sh");
     expect(paths).toContain("README.md");
     const install = files.find((f) => f.path === "install.sh")!;
     expect(install.mode).toBe(0o755);
     expect(install.content.startsWith("#!/usr/bin/env bash")).toBe(true);
+    // install.sh copies the root agent.md into the runtime location
+    expect(install.content).toContain('cp "$HERE/agent.md"');
+    expect(install.content).toContain(".claude/agents");
   });
 });
 
 describe("adk target", () => {
   const plugin = getTargetPlugin("adk");
-  it("produces a python package with __init__ and requirements", () => {
+  it("puts a visible agent.py + requirements at the root; install builds the package", () => {
     const files = plugin.buildArtifacts("root_agent = None", ctx);
     const paths = files.map((f) => f.path);
-    expect(paths).toContain("my_agent/agent.py");
-    expect(paths).toContain("my_agent/__init__.py");
+    expect(paths).toContain("agent.py");
     expect(paths).toContain("requirements.txt");
+    expect(paths).toContain("install.sh");
+    const install = files.find((f) => f.path === "install.sh")!;
+    expect(install.content).toContain("__init__.py");
+    expect(install.content).toContain("my_agent");
   });
 });
 
