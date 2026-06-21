@@ -13,5 +13,5 @@ coverage/
 
 # runtime artifacts
 .nightcrow/logs/
-.omc/state/
+.omc/
 tmp/
