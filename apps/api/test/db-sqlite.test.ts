@@ -12,10 +12,9 @@ const user = (id: string, over: Partial<UserRecord> = {}): UserRecord => ({
   displayName: id,
   role: "user",
   status: "pending",
-  authMethod: "passkey",
   createdAt: 1,
   username: id,
-  credentials: [],
+  passwordHash: "scrypt$00$00",
   ...over,
 });
 
@@ -32,16 +31,12 @@ const item = (id: string, ownerId: string): HistoryItem => ({
 });
 
 describe("sqlite user repository", () => {
-  it("inserts and looks up by id, username, and credential", async () => {
+  it("inserts and looks up by id and (case-insensitive) username", async () => {
     const d = db();
-    await d.users.insert(
-      user("usr_1", { credentials: [{ id: "credA", publicKey: "PK", counter: 0 }] }),
-    );
+    await d.users.insert(user("usr_1"));
     expect((await d.users.findById("usr_1"))?.username).toBe("usr_1");
     expect((await d.users.findByUsername("USR_1"))?.id).toBe("usr_1");
-    const byCred = await d.users.findByCredentialId("credA");
-    expect(byCred?.user.id).toBe("usr_1");
-    expect(byCred?.credential.publicKey).toBe("PK");
+    expect(await d.users.findByUsername("missing")).toBeUndefined();
   });
 
   it("activates users but refuses to change admins; counts admins", async () => {

@@ -123,8 +123,6 @@ export type SseEventName = (typeof SSE_EVENT_NAMES)[number];
 export type Role = "admin" | "user";
 /** Regular users start "pending" and must be activated by an admin. */
 export type UserStatus = "active" | "pending";
-/** Admin authenticates with a password; everyone else with a passkey. */
-export type AuthMethod = "password" | "passkey";
 
 /** User shape safe to expose to the client (no secrets). */
 export interface PublicUser {
@@ -132,7 +130,6 @@ export interface PublicUser {
   displayName: string;
   role: Role;
   status: UserStatus;
-  authMethod: AuthMethod;
   createdAt: number;
 }
 
@@ -146,10 +143,17 @@ export interface MeResponse {
   user: PublicUser;
 }
 
-/** POST /api/auth/login (admin id/password). */
-export interface AdminLoginRequest {
+/** POST /api/auth/login — username + password, any role. */
+export interface LoginRequest {
   username: string;
   password: string;
+}
+
+/** POST /api/auth/register — self-signup (created pending, admin-activated). */
+export interface RegisterRequest {
+  username: string;
+  password: string;
+  displayName?: string;
 }
 
 /** POST /api/admin/password (admin only). */
@@ -158,40 +162,8 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
-/**
- * WebAuthn payloads are passed through opaquely to keep this package
- * dependency-free; the server validates them with @simplewebauthn/server.
- */
-export type WebAuthnJSON = Record<string, unknown>;
-
-export interface PasskeyRegisterStartRequest {
-  username: string;
-  displayName?: string;
-}
-export interface PasskeyRegisterStartResponse {
-  /** Opaque registration ceremony id echoed back on finish. */
-  flowId: string;
-  options: WebAuthnJSON;
-}
-export interface PasskeyRegisterFinishRequest {
-  flowId: string;
-  response: WebAuthnJSON;
-}
-
-export interface PasskeyLoginStartResponse {
-  flowId: string;
-  options: WebAuthnJSON;
-}
-export interface PasskeyLoginFinishRequest {
-  flowId: string;
-  response: WebAuthnJSON;
-}
-
 /** Admin view of a user (GET /api/admin/users). */
-export interface AdminUser extends PublicUser {
-  /** Number of registered passkeys (for passkey users). */
-  passkeyCount: number;
-}
+export type AdminUser = PublicUser;
 export interface AdminUsersResponse {
   users: AdminUser[];
 }

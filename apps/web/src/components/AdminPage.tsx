@@ -58,7 +58,7 @@ function UsersCard() {
       <CardHeader>
         <CardTitle className="text-sm">Users</CardTitle>
         <CardDescription>
-          Activate passkey users so they can generate agents.
+          Activate registered users so they can sign in and generate agents.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -88,8 +88,7 @@ function UsersCard() {
                 </Badge>
               </div>
               <div className="text-[11px] text-muted-foreground">
-                {u.authMethod}
-                {u.authMethod === "passkey" && ` · ${u.passkeyCount} passkey(s)`}
+                joined {new Date(u.createdAt).toLocaleDateString()}
               </div>
             </div>
             {u.role !== "admin" && (

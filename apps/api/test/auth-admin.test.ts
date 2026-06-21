@@ -3,7 +3,6 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp, type BuiltApp } from "../src/app.js";
-import { newPasskeyUser } from "../src/auth/users.js";
 
 const ADMIN = { username: "admin", password: "admin-pw-12345" };
 let app: BuiltApp;
@@ -16,7 +15,7 @@ beforeAll(async () => {
     dataRoot,
     db: { driver: "sqlite", sqlitePath: ":memory:" },
     auth: {
-      sessionSecret: "s",
+      sessionSecret: "session-secret-long-enough",
       sessionTtlMs: 3_600_000,
       adminUsername: ADMIN.username,
       adminPassword: ADMIN.password,
@@ -38,7 +37,14 @@ afterAll(async () => {
 
 const bearer = () => ({ authorization: `Bearer ${token}` });
 
-describe("admin auth", () => {
+async function userByName(name: string) {
+  const list = await app.app.inject({ url: "/api/admin/users", headers: bearer() });
+  return (list.json() as { users: { id: string; displayName: string; status: string }[] }).users.find(
+    (u) => u.displayName === name,
+  );
+}
+
+describe("password auth", () => {
   it("rejects wrong credentials", async () => {
     const res = await app.app.inject({
       method: "POST",
@@ -53,33 +59,55 @@ describe("admin auth", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("activates a pending passkey user", async () => {
-    const user = newPasskeyUser("usr_pending1", "alice", "Alice");
-    await app.db.users.insert(user);
-    await app.db.users.addCredential(user.id, {
-      id: "cred1",
-      publicKey: "AAAA",
-      counter: 0,
+  it("registers a pending user, blocks login, then admin activates and login works", async () => {
+    const reg = await app.app.inject({
+      method: "POST",
+      url: "/api/auth/register",
+      payload: { username: "alice", password: "alice-password", displayName: "Alice" },
     });
+    expect(reg.statusCode).toBe(201);
 
-    let list = await app.app.inject({ url: "/api/admin/users", headers: bearer() });
-    let found = (list.json() as { users: { id: string; status: string; passkeyCount: number }[] }).users.find(
-      (u) => u.id === user.id,
-    );
-    expect(found).toMatchObject({ status: "pending", passkeyCount: 1 });
+    // pending account cannot log in yet
+    const pending = await app.app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { username: "alice", password: "alice-password" },
+    });
+    expect(pending.statusCode).toBe(403);
+    expect((pending.json() as { code: string }).code).toBe("pending_activation");
+
+    const found = await userByName("Alice");
+    expect(found?.status).toBe("pending");
 
     const act = await app.app.inject({
       method: "POST",
-      url: `/api/admin/users/${user.id}/activate`,
+      url: `/api/admin/users/${found!.id}/activate`,
       headers: bearer(),
     });
     expect(act.statusCode).toBe(200);
 
-    list = await app.app.inject({ url: "/api/admin/users", headers: bearer() });
-    found = (list.json() as { users: { id: string; status: string; passkeyCount: number }[] }).users.find(
-      (u) => u.id === user.id,
-    );
-    expect(found?.status).toBe("active");
+    const ok = await app.app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { username: "alice", password: "alice-password" },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect((ok.json() as { user: { role: string } }).user.role).toBe("user");
+  });
+
+  it("rejects duplicate usernames and weak passwords on register", async () => {
+    const dup = await app.app.inject({
+      method: "POST",
+      url: "/api/auth/register",
+      payload: { username: "alice", password: "another-password" },
+    });
+    expect(dup.statusCode).toBe(409);
+    const weak = await app.app.inject({
+      method: "POST",
+      url: "/api/auth/register",
+      payload: { username: "bob", password: "short" },
+    });
+    expect(weak.statusCode).toBe(400);
   });
 
   it("changes the admin password", async () => {

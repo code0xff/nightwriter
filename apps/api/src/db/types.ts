@@ -1,33 +1,15 @@
-import type {
-  AuthMethod,
-  HistoryItem,
-  Role,
-  UserStatus,
-} from "@nightwriter/shared";
+import type { HistoryItem, Role, UserStatus } from "@nightwriter/shared";
 
 /* --------------------------- persistence records -------------------------- */
-
-export interface PasskeyCredential {
-  /** credential id, base64url */
-  id: string;
-  /** COSE public key, base64url */
-  publicKey: string;
-  counter: number;
-  transports?: string[];
-}
 
 export interface UserRecord {
   id: string;
   displayName: string;
   role: Role;
   status: UserStatus;
-  authMethod: AuthMethod;
   createdAt: number;
-  // password (admin) auth
-  username?: string;
-  passwordHash?: string;
-  // passkey auth
-  credentials?: PasskeyCredential[];
+  username: string;
+  passwordHash: string;
 }
 
 /* ------------------------------ repositories ------------------------------ *
@@ -41,11 +23,6 @@ export interface UserRepository {
   list(): Promise<UserRecord[]>;
   findById(id: string): Promise<UserRecord | undefined>;
   findByUsername(username: string): Promise<UserRecord | undefined>;
-  findByCredentialId(
-    credId: string,
-  ): Promise<{ user: UserRecord; credential: PasskeyCredential } | undefined>;
-  addCredential(userId: string, cred: PasskeyCredential): Promise<void>;
-  updateCredentialCounter(credId: string, counter: number): Promise<void>;
   /** Returns false if the user doesn't exist or is an admin. */
   setStatus(userId: string, status: UserStatus): Promise<boolean>;
   setPassword(userId: string, passwordHash: string): Promise<void>;

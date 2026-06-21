@@ -5,7 +5,6 @@ import type { HistoryItem } from "@nightwriter/shared";
 import type {
   Database as Db,
   HistoryRepository,
-  PasskeyCredential,
   SettingsRepository,
   UserRecord,
   UserRepository,
@@ -17,19 +16,10 @@ CREATE TABLE users (
   display_name TEXT NOT NULL,
   role         TEXT NOT NULL,
   status       TEXT NOT NULL,
-  auth_method  TEXT NOT NULL,
   created_at   INTEGER NOT NULL,
-  username     TEXT UNIQUE,
-  password_hash TEXT
+  username     TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL
 );
-CREATE TABLE credentials (
-  id          TEXT PRIMARY KEY,
-  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  public_key  TEXT NOT NULL,
-  counter     INTEGER NOT NULL DEFAULT 0,
-  transports  TEXT
-);
-CREATE INDEX idx_credentials_user ON credentials(user_id);
 CREATE TABLE history (
   id         TEXT PRIMARY KEY,
   owner_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -55,17 +45,9 @@ interface UserRow {
   display_name: string;
   role: string;
   status: string;
-  auth_method: string;
   created_at: number;
-  username: string | null;
-  password_hash: string | null;
-}
-interface CredRow {
-  id: string;
-  user_id: string;
-  public_key: string;
-  counter: number;
-  transports: string | null;
+  username: string;
+  password_hash: string;
 }
 interface HistoryRow {
   id: string;
@@ -84,8 +66,6 @@ function migrate(db: DB): void {
   db.pragma("foreign_keys = ON");
   const version = db.pragma("user_version", { simple: true }) as number;
   if (version < 1) {
-    // Apply schema + version bump atomically so an interrupted migration
-    // can't leave a half-created schema that won't re-migrate.
     db.transaction(() => {
       db.exec(SCHEMA_V1);
       db.pragma("user_version = 1");
@@ -93,34 +73,20 @@ function migrate(db: DB): void {
   }
 }
 
+function toUser(row: UserRow): UserRecord {
+  return {
+    id: row.id,
+    displayName: row.display_name,
+    role: row.role as UserRecord["role"],
+    status: row.status as UserRecord["status"],
+    createdAt: row.created_at,
+    username: row.username,
+    passwordHash: row.password_hash,
+  };
+}
+
 class SqliteUsers implements UserRepository {
   constructor(private readonly db: DB) {}
-
-  private credsOf(userId: string): PasskeyCredential[] {
-    const rows = this.db
-      .prepare("SELECT * FROM credentials WHERE user_id = ?")
-      .all(userId) as CredRow[];
-    return rows.map((c) => ({
-      id: c.id,
-      publicKey: c.public_key,
-      counter: c.counter,
-      transports: c.transports ? (JSON.parse(c.transports) as string[]) : undefined,
-    }));
-  }
-
-  private toUser(row: UserRow): UserRecord {
-    return {
-      id: row.id,
-      displayName: row.display_name,
-      role: row.role as UserRecord["role"],
-      status: row.status as UserRecord["status"],
-      authMethod: row.auth_method as UserRecord["authMethod"],
-      createdAt: row.created_at,
-      username: row.username ?? undefined,
-      passwordHash: row.password_hash ?? undefined,
-      credentials: this.credsOf(row.id),
-    };
-  }
 
   async countAdmins(): Promise<number> {
     const r = this.db
@@ -130,93 +96,41 @@ class SqliteUsers implements UserRepository {
   }
 
   async insert(u: UserRecord): Promise<void> {
-    const tx = this.db.transaction((user: UserRecord) => {
-      this.db
-        .prepare(
-          `INSERT INTO users (id, display_name, role, status, auth_method, created_at, username, password_hash)
-           VALUES (@id, @displayName, @role, @status, @authMethod, @createdAt, @username, @passwordHash)`,
-        )
-        .run({
-          id: user.id,
-          displayName: user.displayName,
-          role: user.role,
-          status: user.status,
-          authMethod: user.authMethod,
-          createdAt: user.createdAt,
-          username: user.username ?? null,
-          passwordHash: user.passwordHash ?? null,
-        });
-      for (const c of user.credentials ?? []) this.insertCred(user.id, c);
-    });
-    tx(u);
-  }
-
-  private insertCred(userId: string, c: PasskeyCredential): void {
     this.db
       .prepare(
-        `INSERT INTO credentials (id, user_id, public_key, counter, transports)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO users (id, display_name, role, status, created_at, username, password_hash)
+         VALUES (@id, @displayName, @role, @status, @createdAt, @username, @passwordHash)`,
       )
-      .run(
-        c.id,
-        userId,
-        c.publicKey,
-        c.counter,
-        c.transports ? JSON.stringify(c.transports) : null,
-      );
+      .run({
+        id: u.id,
+        displayName: u.displayName,
+        role: u.role,
+        status: u.status,
+        createdAt: u.createdAt,
+        username: u.username,
+        passwordHash: u.passwordHash,
+      });
   }
 
   async list(): Promise<UserRecord[]> {
     const rows = this.db
       .prepare("SELECT * FROM users ORDER BY created_at ASC")
       .all() as UserRow[];
-    return rows.map((r) => this.toUser(r));
+    return rows.map(toUser);
   }
 
   async findById(id: string): Promise<UserRecord | undefined> {
     const row = this.db.prepare("SELECT * FROM users WHERE id = ?").get(id) as
       | UserRow
       | undefined;
-    return row ? this.toUser(row) : undefined;
+    return row ? toUser(row) : undefined;
   }
 
   async findByUsername(username: string): Promise<UserRecord | undefined> {
     const row = this.db
       .prepare("SELECT * FROM users WHERE username = ?")
       .get(username.toLowerCase()) as UserRow | undefined;
-    return row ? this.toUser(row) : undefined;
-  }
-
-  async findByCredentialId(credId: string) {
-    const cred = this.db
-      .prepare("SELECT * FROM credentials WHERE id = ?")
-      .get(credId) as CredRow | undefined;
-    if (!cred) return undefined;
-    const user = await this.findById(cred.user_id);
-    if (!user) return undefined;
-    return {
-      user,
-      credential: {
-        id: cred.id,
-        publicKey: cred.public_key,
-        counter: cred.counter,
-        transports: cred.transports
-          ? (JSON.parse(cred.transports) as string[])
-          : undefined,
-      },
-    };
-  }
-
-  async addCredential(userId: string, cred: PasskeyCredential): Promise<void> {
-    this.insertCred(userId, cred);
-  }
-
-  async updateCredentialCounter(credId: string, counter: number): Promise<void> {
-    // Monotonic: never let a concurrent/replayed login regress the counter,
-    // which would weaken authenticator clone detection.
-    this.db
-      .prepare("UPDATE credentials SET counter = ? WHERE id = ? AND counter < ?")
-      .run(counter, credId, counter);
+    return row ? toUser(row) : undefined;
   }
 
   async setStatus(
