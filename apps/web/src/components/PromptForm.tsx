@@ -124,10 +124,12 @@ export function PromptForm({ disabled, onSubmit }: Props) {
             disabled={disabled}
           >
             <SelectTrigger>
-              <span className="flex min-w-0 items-center gap-2">
+              {/* div (not span) so the trigger's [&>span]:line-clamp-1 rule
+                  doesn't force display:-webkit-box and stack icon + label */}
+              <div className="flex min-w-0 items-center gap-2">
                 <TargetIcon className="size-4 shrink-0 text-muted-foreground" />
                 <span className="truncate">{activeTarget.label}</span>
-              </span>
+              </div>
             </SelectTrigger>
             <SelectContent>
               {TARGET_OPTIONS.map((t) => {
