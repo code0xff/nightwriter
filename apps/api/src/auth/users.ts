@@ -16,7 +16,11 @@ export function toPublicUser(u: UserRecord): PublicUser {
 }
 
 export function toAdminUser(u: UserRecord): AdminUser {
-  return toPublicUser(u);
+  return {
+    ...toPublicUser(u),
+    hasPassword: !!u.passwordHash,
+    passkeyCount: u.credentials?.length ?? 0,
+  };
 }
 
 /** Ensure an admin exists, seeding from env (password generated if absent). */
@@ -45,7 +49,7 @@ export async function seedAdmin(
   logger.info(`Seeded admin user "${username}"`);
 }
 
-/** Build a pending self-signup user record. */
+/** Build a pending self-signup user record (password auth). */
 export async function newPasswordUser(
   username: string,
   password: string,
@@ -59,5 +63,22 @@ export async function newPasswordUser(
     createdAt: Date.now(),
     username: username.toLowerCase(),
     passwordHash: await hashPassword(password),
+  };
+}
+
+/** Build a pending passkey user record (credential added on finish). */
+export function newPasskeyUser(
+  id: string,
+  username: string,
+  displayName: string,
+): UserRecord {
+  return {
+    id,
+    displayName: displayName || username,
+    role: "user",
+    status: "pending",
+    createdAt: Date.now(),
+    username: username.toLowerCase(),
+    credentials: [],
   };
 }

@@ -43,8 +43,9 @@ for several runtimes (Claude / Codex / OpenClaw / Hermes / ADK).
     `openDatabase()` factory (`index.ts`) switchable to Postgres. **Swap/add a
     backend here; don't bypass the interfaces.**
   - `src/auth/` — `crypto.ts` (scrypt passwords, HMAC session tokens),
-    `users.ts` (mappers + admin seeding + password-user factory), `service.ts`
-    (username/password login + self-register), `guards.ts` (Fastify preHandlers).
+    `users.ts` (mappers + admin seeding + user factories), `service.ts`
+    (password login/register + passkey ceremonies via @simplewebauthn/server),
+    `guards.ts` (Fastify preHandlers).
   - `src/history/` — `store.ts`: durable history (metadata via repo, zip
     artifacts on disk under `<dataRoot>/artifacts`).
   - `src/routes/` — HTTP + SSE endpoints; `auth.ts`/`admin.ts`/`history.ts`/
@@ -69,12 +70,14 @@ for several runtimes (Claude / Codex / OpenClaw / Hermes / ADK).
 
 ## Auth, history & storage
 
-- **Access is gated.** Everyone signs in with a **username + password**. New
-  users self-register (`/api/auth/register`) and are created `pending`; an admin
-  must activate them (`status: pending → active`) before they can sign in. The
-  admin is env-seeded (`NIGHTWRITER_ADMIN_*`) and always active; the UI differs by
+- **Access is gated.** Users sign in with **either a password or a passkey**
+  (WebAuthn) — both on one login screen. A `UserRecord` may carry `passwordHash`
+  and/or `credentials[]` (either optional). New users self-register
+  (`/api/auth/register` or the passkey ceremony) created `pending`; an admin must
+  activate them (`status: pending → active`) before they can sign in. The admin is
+  env-seeded (`NIGHTWRITER_ADMIN_*`, password) and always active; the UI differs by
   role after sign-in. Generations are **owned by the creator**; history is
-  **permanent** and owner-deletable. (No passkeys — unified password auth.)
+  **permanent** and owner-deletable.
 - **All `/api/generate/*` and `/api/history/*` require a session token** (Bearer
   header, or `?token=` for SSE since EventSource can't set headers). Guards:
   `requireAuth` → `requireActive` / `requireAdmin`.

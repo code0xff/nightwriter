@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyRound, Loader2, ShieldCheck, UserPlus } from "lucide-react";
+import { Fingerprint, KeyRound, Loader2, ShieldCheck, UserPlus } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApiError } from "@/lib/api";
-import { login, register } from "@/lib/authApi";
+import { login, loginPasskey, register, registerPasskey } from "@/lib/authApi";
 import { useAuth } from "@/lib/authContext";
 
 export function LoginScreen() {
@@ -30,7 +30,8 @@ export function LoginScreen() {
         <CardHeader>
           <CardTitle className="text-sm">Account</CardTitle>
           <CardDescription>
-            New accounts need an admin to approve them before first sign-in.
+            Use a password or a passkey. New accounts need an admin to approve
+            them before first sign-in.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -58,7 +59,19 @@ function errMessage(err: unknown): string {
       return "Your account is awaiting admin approval.";
     return err.message;
   }
+  if (err instanceof Error && err.name === "NotAllowedError")
+    return "Passkey prompt was dismissed.";
   return err instanceof Error ? err.message : String(err);
+}
+
+function Divider() {
+  return (
+    <div className="flex items-center gap-2 py-1 text-[11px] text-muted-foreground">
+      <span className="h-px flex-1 bg-border" />
+      or
+      <span className="h-px flex-1 bg-border" />
+    </div>
+  );
 }
 
 function SignIn({
@@ -68,54 +81,57 @@ function SignIn({
 }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"password" | "passkey" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const go = async () => {
-    setBusy(true);
+  const run = async (kind: "password" | "passkey") => {
+    setBusy(kind);
     setError(null);
     try {
-      onSession(await login(username.trim(), password));
+      onSession(
+        kind === "password"
+          ? await login(username.trim(), password)
+          : await loginPasskey(),
+      );
     } catch (err) {
       setError(errMessage(err));
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
   return (
-    <form
-      className="space-y-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void go();
-      }}
-    >
-      <Field
-        id="login-username"
-        label="Username"
-        value={username}
-        onChange={setUsername}
-        autoComplete="username"
-      />
-      <Field
-        id="login-password"
-        label="Password"
-        type="password"
-        value={password}
-        onChange={setPassword}
-        autoComplete="current-password"
-      />
-      <Button className="w-full" type="submit" disabled={busy || !username || !password}>
-        {busy ? <Loader2 className="animate-spin" /> : <KeyRound />}
-        Sign in
+    <div className="space-y-3">
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run("password");
+        }}
+      >
+        <Field id="login-username" label="Username" value={username} onChange={setUsername} autoComplete="username" />
+        <Field id="login-password" label="Password" type="password" value={password} onChange={setPassword} autoComplete="current-password" />
+        <Button className="w-full" type="submit" disabled={!!busy || !username || !password}>
+          {busy === "password" ? <Loader2 className="animate-spin" /> : <KeyRound />}
+          Sign in
+        </Button>
+      </form>
+      <Divider />
+      <Button
+        className="w-full"
+        variant="outline"
+        onClick={() => run("passkey")}
+        disabled={!!busy}
+      >
+        {busy === "passkey" ? <Loader2 className="animate-spin" /> : <Fingerprint />}
+        Sign in with passkey
       </Button>
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-    </form>
+    </div>
   );
 }
 
@@ -123,20 +139,22 @@ function Register() {
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"password" | "passkey" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  const go = async () => {
-    setBusy(true);
+  const run = async (kind: "password" | "passkey") => {
+    setBusy(kind);
     setError(null);
     try {
-      await register(username.trim(), password, displayName.trim() || undefined);
+      const name = displayName.trim() || undefined;
+      if (kind === "password") await register(username.trim(), password, name);
+      else await registerPasskey(username.trim(), name);
       setDone(true);
     } catch (err) {
       setError(errMessage(err));
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
@@ -150,51 +168,42 @@ function Register() {
       </Alert>
     );
 
+  const usernameOk = username.trim().length >= 3;
+
   return (
-    <form
-      className="space-y-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void go();
-      }}
-    >
-      <Field
-        id="reg-username"
-        label="Username"
-        value={username}
-        onChange={setUsername}
-        placeholder="jane"
-        autoComplete="username"
-      />
-      <Field
-        id="reg-display"
-        label="Display name (optional)"
-        value={displayName}
-        onChange={setDisplayName}
-        placeholder="Jane Doe"
-      />
-      <Field
-        id="reg-password"
-        label="Password (min 8 chars)"
-        type="password"
-        value={password}
-        onChange={setPassword}
-        autoComplete="new-password"
-      />
+    <div className="space-y-3">
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run("password");
+        }}
+      >
+        <Field id="reg-username" label="Username" value={username} onChange={setUsername} placeholder="jane" autoComplete="username" />
+        <Field id="reg-display" label="Display name (optional)" value={displayName} onChange={setDisplayName} placeholder="Jane Doe" />
+        <Field id="reg-password" label="Password (min 8 chars)" type="password" value={password} onChange={setPassword} autoComplete="new-password" />
+        <Button className="w-full" type="submit" disabled={!!busy || !usernameOk || password.length < 8}>
+          {busy === "password" ? <Loader2 className="animate-spin" /> : <UserPlus />}
+          Create account
+        </Button>
+      </form>
+      <Divider />
       <Button
         className="w-full"
-        type="submit"
-        disabled={busy || username.trim().length < 3 || password.length < 8}
+        variant="outline"
+        onClick={() => run("passkey")}
+        disabled={!!busy || !usernameOk}
+        title={usernameOk ? undefined : "Enter a username first"}
       >
-        {busy ? <Loader2 className="animate-spin" /> : <UserPlus />}
-        Create account
+        {busy === "passkey" ? <Loader2 className="animate-spin" /> : <Fingerprint />}
+        Register with a passkey
       </Button>
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-    </form>
+    </div>
   );
 }
 

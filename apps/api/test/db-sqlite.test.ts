@@ -39,6 +39,25 @@ describe("sqlite user repository", () => {
     expect(await d.users.findByUsername("missing")).toBeUndefined();
   });
 
+  it("stores and looks up passkey credentials, monotonic counter", async () => {
+    const d = db();
+    await d.users.insert(
+      user("usr_pk", {
+        passwordHash: undefined,
+        credentials: [{ id: "credA", publicKey: "PK", counter: 0 }],
+      }),
+    );
+    const byCred = await d.users.findByCredentialId("credA");
+    expect(byCred?.user.id).toBe("usr_pk");
+    expect(byCred?.credential.publicKey).toBe("PK");
+
+    await d.users.updateCredentialCounter("credA", 5);
+    expect((await d.users.findByCredentialId("credA"))?.credential.counter).toBe(5);
+    // a lower counter is ignored (clone-detection safety)
+    await d.users.updateCredentialCounter("credA", 3);
+    expect((await d.users.findByCredentialId("credA"))?.credential.counter).toBe(5);
+  });
+
   it("activates users but refuses to change admins; counts admins", async () => {
     const d = db();
     await d.users.insert(user("usr_admin", { role: "admin", status: "active" }));

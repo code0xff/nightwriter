@@ -64,12 +64,13 @@ The hook falls back to the nvm-managed Node when `node`/`pnpm` aren't on PATH.
 
 ## Auth & history
 
-Access is gated. **Everyone signs in with a username + password.** New users
-**self-register** (created `pending`) and must be **activated by an admin**
-before their first sign-in; the admin account is seeded from env and is always
-active. After sign-in the UI differs by role — admins additionally get the Admin
-page. Each generation is **owned by its creator**; history is kept **permanently**
-and is **re-downloadable and deletable by the owner**.
+Access is gated. Users sign in with **either a password or a passkey** (WebAuthn)
+— both methods are available on one login screen. New users **self-register**
+(created `pending`) and must be **activated by an admin** before their first
+sign-in; the admin account is seeded from env and is always active. After
+sign-in the UI differs by role — admins additionally get the Admin page. Each
+generation is **owned by its creator**; history is kept **permanently** and is
+**re-downloadable and deletable by the owner**.
 
 Storage goes through a **repository abstraction** (`src/db`): async
 `UserRepository` / `HistoryRepository` / `SettingsRepository` interfaces with a
@@ -84,7 +85,9 @@ All `/api/generate/*` and `/api/history/*` require a session token
 | Method | Path | Notes |
 |--------|------|-------|
 | POST | `/api/auth/login` | username/password → `{ token, user }` |
-| POST | `/api/auth/register` | self-signup → pending user |
+| POST | `/api/auth/register` | password self-signup → pending user |
+| POST | `/api/auth/passkey/register/start` · `/finish` | passkey self-signup → pending |
+| POST | `/api/auth/passkey/login/start` · `/finish` | passkey sign-in |
 | GET | `/api/auth/me` | current session user |
 | GET | `/api/admin/users` | (admin) list users |
 | POST | `/api/admin/users/:id/activate` · `/deactivate` | (admin) toggle access |
@@ -119,6 +122,8 @@ All `/api/generate/*` and `/api/history/*` require a session token
 | `NIGHTWRITER_ADMIN_USERNAME` / `NIGHTWRITER_ADMIN_PASSWORD` | `admin` / _generated_ | seed admin (password logged once if unset) |
 | `NIGHTWRITER_SESSION_SECRET` | _generated+persisted_ | HMAC secret for session tokens |
 | `NIGHTWRITER_SESSION_TTL_MS` | `604800000` | session lifetime (7d) |
+| `NIGHTWRITER_RP_ID` / `NIGHTWRITER_RP_NAME` | `localhost` / `Nightwriter` | WebAuthn relying party (passkeys) |
+| `NIGHTWRITER_ORIGIN` | `http://localhost:5173` | allowed passkey origins (host must match RP ID) |
 
 ## Security notes
 
@@ -142,5 +147,8 @@ pnpm --filter @nightwriter/web exec vite --host 0.0.0.0
 ```
 
 Then open `http://<this-host-ip>:5173`. Username/password login works over a LAN
-IP (the web server proxies `/api`). Prefer HTTPS for any non-loopback exposure so
-session tokens aren't sent in cleartext.
+IP (the web server proxies `/api`). **Passkeys only work on `localhost` over HTTP**
+— WebAuthn needs a secure context and the page host must match `NIGHTWRITER_RP_ID`;
+for remote passkeys serve over HTTPS with a real hostname and set
+`NIGHTWRITER_RP_ID`/`NIGHTWRITER_ORIGIN`. Prefer HTTPS for any non-loopback
+exposure so session tokens aren't sent in cleartext.

@@ -5,6 +5,7 @@ import type { HistoryItem } from "@nightwriter/shared";
 import type {
   Database as Db,
   HistoryRepository,
+  PasskeyCredential,
   SettingsRepository,
   UserRecord,
   UserRepository,
@@ -18,8 +19,16 @@ CREATE TABLE users (
   status       TEXT NOT NULL,
   created_at   INTEGER NOT NULL,
   username     TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL
+  password_hash TEXT
 );
+CREATE TABLE credentials (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  public_key  TEXT NOT NULL,
+  counter     INTEGER NOT NULL DEFAULT 0,
+  transports  TEXT
+);
+CREATE INDEX idx_credentials_user ON credentials(user_id);
 CREATE TABLE history (
   id         TEXT PRIMARY KEY,
   owner_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -47,7 +56,14 @@ interface UserRow {
   status: string;
   created_at: number;
   username: string;
-  password_hash: string;
+  password_hash: string | null;
+}
+interface CredRow {
+  id: string;
+  user_id: string;
+  public_key: string;
+  counter: number;
+  transports: string | null;
 }
 interface HistoryRow {
   id: string;
@@ -73,20 +89,37 @@ function migrate(db: DB): void {
   }
 }
 
-function toUser(row: UserRow): UserRecord {
+function credFromRow(c: CredRow): PasskeyCredential {
   return {
-    id: row.id,
-    displayName: row.display_name,
-    role: row.role as UserRecord["role"],
-    status: row.status as UserRecord["status"],
-    createdAt: row.created_at,
-    username: row.username,
-    passwordHash: row.password_hash,
+    id: c.id,
+    publicKey: c.public_key,
+    counter: c.counter,
+    transports: c.transports ? (JSON.parse(c.transports) as string[]) : undefined,
   };
 }
 
 class SqliteUsers implements UserRepository {
   constructor(private readonly db: DB) {}
+
+  private credsOf(userId: string): PasskeyCredential[] {
+    const rows = this.db
+      .prepare("SELECT * FROM credentials WHERE user_id = ?")
+      .all(userId) as CredRow[];
+    return rows.map(credFromRow);
+  }
+
+  private toUser(row: UserRow): UserRecord {
+    return {
+      id: row.id,
+      displayName: row.display_name,
+      role: row.role as UserRecord["role"],
+      status: row.status as UserRecord["status"],
+      createdAt: row.created_at,
+      username: row.username,
+      passwordHash: row.password_hash ?? undefined,
+      credentials: this.credsOf(row.id),
+    };
+  }
 
   async countAdmins(): Promise<number> {
     const r = this.db
@@ -96,41 +129,81 @@ class SqliteUsers implements UserRepository {
   }
 
   async insert(u: UserRecord): Promise<void> {
+    const tx = this.db.transaction((user: UserRecord) => {
+      this.db
+        .prepare(
+          `INSERT INTO users (id, display_name, role, status, created_at, username, password_hash)
+           VALUES (@id, @displayName, @role, @status, @createdAt, @username, @passwordHash)`,
+        )
+        .run({
+          id: user.id,
+          displayName: user.displayName,
+          role: user.role,
+          status: user.status,
+          createdAt: user.createdAt,
+          username: user.username,
+          passwordHash: user.passwordHash ?? null,
+        });
+      for (const c of user.credentials ?? []) this.insertCred(user.id, c);
+    });
+    tx(u);
+  }
+
+  private insertCred(userId: string, c: PasskeyCredential): void {
     this.db
       .prepare(
-        `INSERT INTO users (id, display_name, role, status, created_at, username, password_hash)
-         VALUES (@id, @displayName, @role, @status, @createdAt, @username, @passwordHash)`,
+        `INSERT INTO credentials (id, user_id, public_key, counter, transports)
+         VALUES (?, ?, ?, ?, ?)`,
       )
-      .run({
-        id: u.id,
-        displayName: u.displayName,
-        role: u.role,
-        status: u.status,
-        createdAt: u.createdAt,
-        username: u.username,
-        passwordHash: u.passwordHash,
-      });
+      .run(
+        c.id,
+        userId,
+        c.publicKey,
+        c.counter,
+        c.transports ? JSON.stringify(c.transports) : null,
+      );
   }
 
   async list(): Promise<UserRecord[]> {
     const rows = this.db
       .prepare("SELECT * FROM users ORDER BY created_at ASC")
       .all() as UserRow[];
-    return rows.map(toUser);
+    return rows.map((r) => this.toUser(r));
   }
 
   async findById(id: string): Promise<UserRecord | undefined> {
     const row = this.db.prepare("SELECT * FROM users WHERE id = ?").get(id) as
       | UserRow
       | undefined;
-    return row ? toUser(row) : undefined;
+    return row ? this.toUser(row) : undefined;
   }
 
   async findByUsername(username: string): Promise<UserRecord | undefined> {
     const row = this.db
       .prepare("SELECT * FROM users WHERE username = ?")
       .get(username.toLowerCase()) as UserRow | undefined;
-    return row ? toUser(row) : undefined;
+    return row ? this.toUser(row) : undefined;
+  }
+
+  async findByCredentialId(credId: string) {
+    const cred = this.db
+      .prepare("SELECT * FROM credentials WHERE id = ?")
+      .get(credId) as CredRow | undefined;
+    if (!cred) return undefined;
+    const user = await this.findById(cred.user_id);
+    if (!user) return undefined;
+    return { user, credential: credFromRow(cred) };
+  }
+
+  async addCredential(userId: string, cred: PasskeyCredential): Promise<void> {
+    this.insertCred(userId, cred);
+  }
+
+  async updateCredentialCounter(credId: string, counter: number): Promise<void> {
+    // Monotonic: never let a concurrent/replayed login regress the counter.
+    this.db
+      .prepare("UPDATE credentials SET counter = ? WHERE id = ? AND counter < ?")
+      .run(counter, credId, counter);
   }
 
   async setStatus(

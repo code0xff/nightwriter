@@ -162,8 +162,38 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
+/* ---- Passkeys (WebAuthn) — an alternative to password, can coexist ---- *
+ * Payloads are passed through opaquely to keep this package dependency-free;
+ * the server validates them with @simplewebauthn/server.
+ */
+export type WebAuthnJSON = Record<string, unknown>;
+
+export interface PasskeyRegisterStartRequest {
+  username: string;
+  displayName?: string;
+}
+export interface PasskeyRegisterStartResponse {
+  flowId: string;
+  options: WebAuthnJSON;
+}
+export interface PasskeyRegisterFinishRequest {
+  flowId: string;
+  response: WebAuthnJSON;
+}
+export interface PasskeyLoginStartResponse {
+  flowId: string;
+  options: WebAuthnJSON;
+}
+export interface PasskeyLoginFinishRequest {
+  flowId: string;
+  response: WebAuthnJSON;
+}
+
 /** Admin view of a user (GET /api/admin/users). */
-export type AdminUser = PublicUser;
+export interface AdminUser extends PublicUser {
+  hasPassword: boolean;
+  passkeyCount: number;
+}
 export interface AdminUsersResponse {
   users: AdminUser[];
 }

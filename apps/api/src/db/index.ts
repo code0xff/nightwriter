@@ -5,6 +5,7 @@ import type { Database } from "./types.js";
 export type {
   Database,
   HistoryRepository,
+  PasskeyCredential,
   SettingsRepository,
   UserRecord,
   UserRepository,

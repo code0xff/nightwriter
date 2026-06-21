@@ -88,7 +88,14 @@ function UsersCard() {
                 </Badge>
               </div>
               <div className="text-[11px] text-muted-foreground">
-                joined {new Date(u.createdAt).toLocaleDateString()}
+                {[
+                  u.hasPassword && "password",
+                  u.passkeyCount > 0 && `${u.passkeyCount} passkey(s)`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "no credentials"}
+                {" · joined "}
+                {new Date(u.createdAt).toLocaleDateString()}
               </div>
             </div>
             {u.role !== "admin" && (
