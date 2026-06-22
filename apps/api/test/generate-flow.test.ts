@@ -138,7 +138,9 @@ describe("generate flow", () => {
       detail.json() as { item: { definition?: string; definitionFile?: string } }
     ).item;
     expect(item.definitionFile).toBe("agent.md");
-    expect(item.definition).toContain("test-agent");
+    expect(item.definition).toContain("You are a test agent");
+    // the frontmatter name is normalized to the slug derived from the prompt
+    expect(item.definition).toContain("name: build-a-meticulous-code-review-agent");
   });
 
   it("returns 400 on invalid target", async () => {

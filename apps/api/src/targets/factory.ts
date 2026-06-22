@@ -15,6 +15,14 @@ export interface TargetSpec {
   /** Visible filename for the definition at the zip root (e.g. "agent.md"). */
   definitionFile: string;
   /**
+   * Optional: rewrite the raw (LLM-generated) definition before it is written
+   * or expanded — e.g. force the runtime's `name` field to match `ctx.slug` so
+   * the identifier users actually invoke lines up with the filename, zip name,
+   * and activation guide. Must be defensive: return the input unchanged when no
+   * recognizable field is present.
+   */
+  normalizeDefinition?: (definition: string, ctx: TargetContext) => string;
+  /**
    * Optional: turn the raw generated definition into one or more files (e.g. a
    * multi-file workspace). When omitted, the definition is a single file at
    * `definitionFile`. Paths are sanitized against traversal before zipping.
@@ -72,6 +80,19 @@ const INSTALL_HEADER = `#!/usr/bin/env bash
 set -euo pipefail
 # Resolve this script's own directory so it works no matter where it is run from.
 HERE="$(cd "$(dirname "\${BASH_SOURCE[0]:-$0}")" && pwd)"
+
+# Copy a packaged file into place: fail loudly if the source is missing from the
+# archive, and note when an existing file is overwritten so repeat installs are
+# transparent (idempotent).
+install_file() {
+  local src="$1" dest="$2"
+  if [ ! -f "$src" ]; then
+    echo "error: expected file not found in archive: $src" >&2
+    exit 1
+  fi
+  [ -e "$dest" ] && echo "note: overwriting existing $dest"
+  cp "$src" "$dest"
+}
 `;
 
 export function createTargetPlugin(spec: TargetSpec): TargetPlugin {
@@ -86,7 +107,10 @@ export function createTargetPlugin(spec: TargetSpec): TargetPlugin {
       );
     },
     buildArtifacts(rawStdout: string, ctx: TargetContext): ArtifactFile[] {
-      const definition = stripCodeFence(rawStdout);
+      const stripped = stripCodeFence(rawStdout);
+      const definition = spec.normalizeDefinition
+        ? spec.normalizeDefinition(stripped, ctx)
+        : stripped;
       // Definition file(s): a single visible file, or a multi-file workspace.
       // Paths are sanitized (zip-slip safe) since they may be LLM-generated.
       // Reserve our own filenames and de-duplicate so colliding (LLM-generated)

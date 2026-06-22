@@ -25,11 +25,14 @@ model: sonnet                    # haiku | sonnet | opus | inherit
 <System prompt body in Markdown: role, responsibilities, a step-by-step
 operating procedure, and constraints. Be specific and actionable.>`,
   definitionFile: "agent.md",
+  // Claude Code invokes a subagent by its frontmatter `name`, not the filename.
+  // Pin it to the slug so the name users call matches the file/zip/guide.
+  normalizeDefinition: (def, ctx) => setFrontmatterName(def, ctx.slug),
   installScript: (ctx) => `# Install the subagent into a project's .claude/agents/.
 # Usage: bash install.sh [project-dir]   (defaults to the current directory)
 DEST="\${1:-$PWD}/.claude/agents"
 mkdir -p "$DEST"
-cp "$HERE/agent.md" "$DEST/${ctx.slug}.md"
+install_file "$HERE/agent.md" "$DEST/${ctx.slug}.md"
 echo "Installed ${ctx.slug}.md to $DEST/"
 echo "Restart Claude Code or run /agents to pick it up."`,
   activationGuide: (ctx) => `# ${ctx.slug} — Claude Code subagent
@@ -49,7 +52,9 @@ Copies \`agent.md\` to \`<project>/.claude/agents/${ctx.slug}.md\`. For user-wid
 use, copy it to \`~/.claude/agents/${ctx.slug}.md\` instead.
 
 ## Activate
-Run \`/agents\` in Claude Code to confirm it loaded, then delegate to it by name.
+Run \`/agents\` in Claude Code to confirm it loaded, then delegate to it by its
+\`name\` — which Nightwriter pins to **\`${ctx.slug}\`** (the frontmatter \`name:\`
+in \`agent.md\`, not the filename).
 `,
 };
 
@@ -71,11 +76,13 @@ sandbox_mode = "read-only"      # read-only | workspace-write | danger-full-acce
 
 Output ONLY valid TOML. Use triple-quoted strings for multi-line values.`,
   definitionFile: "agent.toml",
+  // Codex identifies a subagent by the TOML `name`, not the filename — pin it.
+  normalizeDefinition: (def, ctx) => setTomlName(def, ctx.slug),
   installScript: (ctx) => `# Install the Codex subagent into a project's .codex/agents/.
 # Usage: bash install.sh [project-dir]   (defaults to the current directory)
 DEST="\${1:-$PWD}/.codex/agents"
 mkdir -p "$DEST"
-cp "$HERE/agent.toml" "$DEST/${ctx.slug}.toml"
+install_file "$HERE/agent.toml" "$DEST/${ctx.slug}.toml"
 echo "Installed ${ctx.slug}.toml to $DEST/"
 echo "For a personal (global) agent, copy it to ~/.codex/agents/${ctx.slug}.toml instead."`,
   activationGuide: (ctx) => `# ${ctx.slug} — Codex subagent
@@ -95,9 +102,9 @@ Copies \`agent.toml\` to \`<project>/.codex/agents/${ctx.slug}.toml\`.
 
 ## Activate
 Codex identifies a subagent by the \`name\` field **inside \`agent.toml\`** (not
-the filename). Start \`codex\` and say e.g. "Use the <name> agent to …" using that
-\`name\`; \`/agent\` switches between agent threads. Adjust the \`model\` in the TOML
-to one your Codex account can use.
+the filename); Nightwriter pins it to **\`${ctx.slug}\`**. Start \`codex\` and say
+e.g. "Use the ${ctx.slug} agent to …"; \`/agent\` switches between agent threads.
+Adjust the \`model\` in the TOML to one your Codex account can use.
 `,
 };
 
@@ -143,9 +150,12 @@ Output ONLY these files with the delimiter lines. No extra commentary or fences.
   definitionFile: "AGENTS.md",
   expandDefinition: (definition) => parseDelimitedFiles(definition, "workspace/", "AGENTS.md"),
   installScript: (ctx) => `# Install the OpenClaw agent workspace.
+SRC="$HERE/workspace"
+[ -d "$SRC" ] || { echo "error: workspace/ not found in archive: $SRC" >&2; exit 1; }
 DEST="\${OPENCLAW_HOME:-$HOME/.openclaw}/workspace-${ctx.slug}"
+[ -d "$DEST" ] && echo "note: updating existing workspace at $DEST"
 mkdir -p "$DEST"
-cp -R "$HERE/workspace/." "$DEST/"
+cp -R "$SRC/." "$DEST/"
 echo "Workspace installed at $DEST"
 echo
 echo "Register the agent (set a model your provider supports):"
@@ -214,10 +224,13 @@ metadata:
 
 Output ONLY the SKILL.md contents (valid YAML frontmatter + Markdown body).`,
   definitionFile: "SKILL.md",
+  // The skill is invoked as /<name>; pin the frontmatter `name` to the slug so
+  // it matches the install dir and the `/${slug}` shown in the guide.
+  normalizeDefinition: (def, ctx) => setFrontmatterName(def, ctx.slug),
   installScript: (ctx) => `# Install the Hermes skill into ~/.hermes/skills/.
 DEST="\${HERMES_HOME:-$HOME/.hermes}/skills/${ctx.slug}"
 mkdir -p "$DEST"
-cp "$HERE/SKILL.md" "$DEST/SKILL.md"
+install_file "$HERE/SKILL.md" "$DEST/SKILL.md"
 echo "Installed skill to $DEST/SKILL.md"
 echo "Verify with: hermes skills list   (invoke in a session as /${ctx.slug})"`,
   activationGuide: (ctx) => `# ${ctx.slug} — Hermes Agent skill
@@ -263,12 +276,15 @@ root_agent = Agent(
 
 Output only valid Python.`,
   definitionFile: "agent.py",
+  // `adk run <pkg>` resolves the agent by its package dir; pin the root_agent
+  // `name=` to the same identifier so the two stay consistent.
+  normalizeDefinition: (def, ctx) => setPyAgentName(def, toPyIdentifier(ctx.slug)),
   installScript: (ctx) => {
-    const pkg = toSnake(ctx.slug);
+    const pkg = toPyIdentifier(ctx.slug);
     return `# Build the ADK package from agent.py and set up a venv.
 PKG="${pkg}"
 mkdir -p "$PKG"
-cp "$HERE/agent.py" "$PKG/agent.py"
+install_file "$HERE/agent.py" "$PKG/agent.py"
 printf 'from . import agent\\n' > "$PKG/__init__.py"
 [ -f "$PKG/.env" ] || cp "$HERE/.env.example" "$PKG/.env"
 python3 -m venv .venv
@@ -279,7 +295,7 @@ echo "Installed. Set your key in $PKG/.env, then run:"
 echo "  source .venv/bin/activate && adk run $PKG     # or: adk web"`;
   },
   activationGuide: (ctx) => {
-    const pkg = toSnake(ctx.slug);
+    const pkg = toPyIdentifier(ctx.slug);
     return `# ${pkg} — Google ADK agent
 
 Generated by Nightwriter from the prompt:
@@ -317,6 +333,57 @@ The \`model\` id in \`agent.py\` may need updating to a current Gemini model.
 
 function toSnake(slug: string): string {
   return slug.replace(/-/g, "_");
+}
+
+// Python keywords + ADK's reserved `user`; none may be used as an agent name.
+const PY_RESERVED = new Set([
+  "user", "False", "None", "True", "and", "as", "assert", "async", "await",
+  "break", "class", "continue", "def", "del", "elif", "else", "except",
+  "finally", "for", "from", "global", "if", "import", "in", "is", "lambda",
+  "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with",
+  "yield",
+]);
+
+/**
+ * A valid Python identifier from a slug: snake_case, with a leading underscore
+ * when it would otherwise start with a digit (`2fa-agent` → `_2fa_agent`) or
+ * collide with a Python keyword / ADK's reserved `user` (`class` → `_class`).
+ */
+function toPyIdentifier(slug: string): string {
+  const snake = toSnake(slug);
+  return /^[0-9]/.test(snake) || PY_RESERVED.has(snake) ? `_${snake}` : snake;
+}
+
+/**
+ * Force the `name:` field inside a leading YAML frontmatter block to `name`.
+ * No-op if the content has no frontmatter or no `name:` line (defensive: the
+ * definition is LLM-generated and may not follow the requested shape).
+ */
+function setFrontmatterName(def: string, name: string): string {
+  if (!def.startsWith("---")) return def;
+  const close = def.indexOf("\n---", 3);
+  if (close === -1) return def;
+  const head = def.slice(0, close);
+  if (!/^name:.*$/m.test(head)) return def;
+  return head.replace(/^name:.*$/m, `name: ${name}`) + def.slice(close);
+}
+
+/** Force the first TOML `name = "…"` assignment to `name`. No-op if absent. */
+function setTomlName(def: string, name: string): string {
+  return def.replace(/^name\s*=\s*".*?"/m, `name = "${name}"`);
+}
+
+/**
+ * Force the `name="…"` of the `root_agent = Agent(…)` call when it is the
+ * first constructor argument (the documented format). Deliberately anchored to
+ * `Agent(` immediately followed by `name=`, so a `name=` nested in an earlier
+ * argument (e.g. a tool) is never corrupted; safely no-ops otherwise.
+ */
+function setPyAgentName(def: string, name: string): string {
+  return def.replace(
+    /(root_agent\s*=\s*Agent\(\s*)name\s*=\s*"[^"]*"/,
+    `$1name="${name}"`,
+  );
 }
 
 /**
