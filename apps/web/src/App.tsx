@@ -6,13 +6,12 @@ import {
   useState,
 } from "react";
 import {
+  ChevronDown,
   FileClock,
   LogOut,
   Menu,
   Moon,
   PackageOpen,
-  PanelLeft,
-  PanelLeftClose,
   PenLine,
   Radio,
   Settings,
@@ -80,26 +79,8 @@ export default function App() {
       </div>
     );
 
-  if (!user)
-    return (
-      <div className="relative min-h-screen bg-background text-foreground">
-        <BackgroundGlow />
-        <header className="sticky top-0 z-20 border-b border-border/70 bg-background/80 backdrop-blur">
-          <div className="container flex h-12 items-center justify-between">
-            <Brand />
-            <Button size="sm" variant="ghost" onClick={toggleTheme} aria-label="Toggle theme">
-              {dark ? <Sun /> : <Moon />}
-            </Button>
-          </div>
-        </header>
-        <main className="container relative z-10 max-w-3xl py-6">
-          <LoginScreen />
-        </main>
-      </div>
-    );
-
   return (
-    <AppShell user={user} dark={dark} onToggleTheme={toggleTheme} onLogout={logout} />
+    <Shell user={user} dark={dark} onToggleTheme={toggleTheme} onLogout={logout} />
   );
 }
 
@@ -130,8 +111,8 @@ interface NavItem {
   show: boolean;
 }
 
-function AppShell(props: {
-  user: PublicUser;
+function Shell(props: {
+  user: PublicUser | null;
   dark: boolean;
   onToggleTheme: () => void;
   onLogout: () => void;
@@ -139,220 +120,267 @@ function AppShell(props: {
   const { user, dark, onToggleTheme, onLogout } = props;
   const [view, setView] = useState<View>("generate");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem("nw_sidebar_collapsed") === "1",
-  );
 
-  const toggleCollapsed = () =>
-    setCollapsed((c) => {
-      const next = !c;
-      localStorage.setItem("nw_sidebar_collapsed", next ? "1" : "0");
-      return next;
-    });
+  // Shell now stays mounted across logout/login, so reset transient view state
+  // whenever the signed-in identity changes (or clears) — otherwise a stale
+  // view (e.g. "admin") or an open drawer can leak into the next session.
+  const userId = user?.id ?? null;
+  useEffect(() => {
+    setView("generate");
+    setDrawerOpen(false);
+  }, [userId]);
 
-  const nav: NavItem[] = [
-    { id: "generate", label: "Generate", icon: <Sparkles className="size-4" />, show: true },
-    { id: "history", label: "History", icon: <FileClock className="size-4" />, show: true },
-    { id: "account", label: "Account", icon: <Settings className="size-4" />, show: true },
-    { id: "admin", label: "Admin", icon: <Users className="size-4" />, show: user.role === "admin" },
-  ];
+  const nav: NavItem[] = user
+    ? ([
+        { id: "generate", label: "Generate", icon: <Sparkles className="size-4" />, show: true },
+        { id: "history", label: "History", icon: <FileClock className="size-4" />, show: true },
+        { id: "account", label: "Account", icon: <Settings className="size-4" />, show: true },
+        { id: "admin", label: "Admin", icon: <Users className="size-4" />, show: user.role === "admin" },
+      ] as NavItem[]).filter((n) => n.show)
+    : [];
 
   const select = (v: View) => {
     setView(v);
     setDrawerOpen(false);
   };
 
-  const sidebar = (
-    extra: string,
-    opts?: { collapsed?: boolean; onToggleCollapse?: () => void },
-  ) => (
-    <Sidebar
-      className={extra}
-      nav={nav}
-      view={view}
-      onSelect={select}
-      user={user}
-      dark={dark}
-      onToggleTheme={onToggleTheme}
-      onLogout={onLogout}
-      collapsed={opts?.collapsed}
-      onToggleCollapse={opts?.onToggleCollapse}
-    />
-  );
-
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
-      {/* Desktop sidebar */}
-      {sidebar("hidden md:flex md:sticky md:top-0 md:h-screen", {
-        collapsed,
-        onToggleCollapse: toggleCollapsed,
-      })}
+    <div className="relative flex min-h-screen flex-col bg-background text-foreground">
+      <Header
+        user={user}
+        nav={nav}
+        view={view}
+        onSelect={select}
+        dark={dark}
+        onToggleTheme={onToggleTheme}
+        onLogout={onLogout}
+        onOpenDrawer={() => setDrawerOpen(true)}
+      />
 
-      {/* Mobile drawer */}
-      {drawerOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <div
-            className="absolute inset-0 bg-black/50 duration-200 animate-in fade-in"
-            onClick={() => setDrawerOpen(false)}
-          />
-          {sidebar(
-            "absolute inset-y-0 left-0 w-64 bg-background shadow-xl duration-200 animate-in slide-in-from-left",
-          )}
-        </div>
+      {/* Mobile nav drawer */}
+      {user && drawerOpen && (
+        <MobileDrawer
+          user={user}
+          nav={nav}
+          view={view}
+          onSelect={select}
+          onClose={() => setDrawerOpen(false)}
+          onLogout={onLogout}
+        />
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* Mobile top bar */}
-        <header className="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-border bg-background/80 px-3 backdrop-blur md:hidden">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setDrawerOpen(true)}
-            aria-label="Open menu"
-          >
-            <Menu />
-          </Button>
-          <Brand />
-        </header>
-
-        <main className="relative flex-1">
-          <BackgroundGlow />
-          <div className="container relative z-10 max-w-3xl space-y-5 py-6">
-            {view === "generate" && <Generator />}
-            {view === "history" && <HistoryPanel />}
-            {view === "account" && <AccountPage />}
-            {view === "admin" && user.role === "admin" && <AdminPage />}
+      <main className="relative flex-1">
+        <BackgroundGlow />
+        <div className="container relative z-10 max-w-3xl space-y-5 py-6">
+          {!user && <LoginScreen />}
+          {user && view === "generate" && <Generator />}
+          {user && view === "history" && <HistoryPanel />}
+          {user && view === "account" && <AccountPage />}
+          {user && view === "admin" && user.role === "admin" && <AdminPage />}
+          {user && (
             <footer className="pt-2 text-center text-[11px] text-muted-foreground">
               Definitions are produced by a real CLI subprocess in an isolated,
               path-guarded workspace.
             </footer>
-          </div>
-        </main>
-      </div>
+          )}
+        </div>
+      </main>
     </div>
   );
 }
 
-function Sidebar(props: {
-  className?: string;
+function Header(props: {
+  user: PublicUser | null;
   nav: NavItem[];
   view: View;
   onSelect: (v: View) => void;
-  user: PublicUser;
   dark: boolean;
   onToggleTheme: () => void;
   onLogout: () => void;
-  collapsed?: boolean;
-  onToggleCollapse?: () => void;
+  onOpenDrawer: () => void;
 }) {
-  const {
-    className,
-    nav,
-    view,
-    onSelect,
-    user,
-    dark,
-    onToggleTheme,
-    onLogout,
-    collapsed = false,
-    onToggleCollapse,
-  } = props;
+  const { user, nav, view, onSelect, dark, onToggleTheme, onLogout, onOpenDrawer } =
+    props;
 
   return (
-    <aside
-      className={cn(
-        "z-50 flex flex-col border-r border-border bg-card/30 transition-[width]",
-        collapsed ? "w-14" : "w-56",
-        className,
-      )}
-    >
-      <div
-        className={cn(
-          "flex h-12 shrink-0 items-center gap-2 border-b border-border px-3",
-          collapsed && "justify-center",
+    <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur">
+      <div className="container flex h-12 items-center gap-3">
+        {user && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="md:hidden"
+            onClick={onOpenDrawer}
+            aria-label="Open menu"
+          >
+            <Menu />
+          </Button>
         )}
+        <Brand />
+
+        {user && (
+          <nav className="ml-3 hidden items-center gap-0.5 md:flex">
+            {nav.map((n) => (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => onSelect(n.id)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors",
+                  view === n.id
+                    ? "bg-secondary font-medium text-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                {n.icon}
+                {n.label}
+              </button>
+            ))}
+          </nav>
+        )}
+
+        <div className="ml-auto flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onToggleTheme}
+            aria-label="Toggle theme"
+          >
+            {dark ? <Sun /> : <Moon />}
+          </Button>
+          {user && <AccountMenu user={user} onLogout={onLogout} />}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const first = parts[0] ?? "";
+  if (!first) return "?";
+  if (parts.length === 1) return first.slice(0, 2).toUpperCase();
+  const last = parts[parts.length - 1] ?? first;
+  return ((first[0] ?? "") + (last[0] ?? "")).toUpperCase();
+}
+
+function AccountMenu(props: { user: PublicUser; onLogout: () => void }) {
+  const { user, onLogout } = props;
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative hidden md:block" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="flex items-center gap-1.5 rounded-md py-1 pl-1 pr-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       >
-        {!collapsed && <Brand />}
-        {onToggleCollapse && (
+        <span className="flex size-6 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-foreground">
+          {initials(user.displayName)}
+        </span>
+        <ChevronDown className="size-3.5" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-1.5 w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md duration-150 animate-in fade-in zoom-in-95">
+          <div className="px-2 py-1.5">
+            <div className="truncate text-xs font-medium">{user.displayName}</div>
+            <div className="text-[11px] capitalize text-muted-foreground">
+              {user.role}
+            </div>
+          </div>
+          <div className="my-1 h-px bg-border" />
           <button
             type="button"
-            onClick={onToggleCollapse}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className={cn(
-              "inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground",
-              !collapsed && "ml-auto",
-            )}
+            onClick={() => {
+              setOpen(false);
+              onLogout();
+            }}
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
-            {collapsed ? (
-              <PanelLeft className="size-4" />
-            ) : (
-              <PanelLeftClose className="size-4" />
-            )}
+            <LogOut className="size-4" />
+            Log out
           </button>
-        )}
-      </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
-      <nav className="flex-1 space-y-1 p-2">
-        {nav
-          .filter((n) => n.show)
-          .map((n) => (
+function MobileDrawer(props: {
+  user: PublicUser;
+  nav: NavItem[];
+  view: View;
+  onSelect: (v: View) => void;
+  onClose: () => void;
+  onLogout: () => void;
+}) {
+  const { user, nav, view, onSelect, onClose, onLogout } = props;
+  return (
+    <div className="fixed inset-0 z-40 md:hidden">
+      <div
+        className="absolute inset-0 bg-black/50 duration-200 animate-in fade-in"
+        onClick={onClose}
+      />
+      <aside className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-border bg-background shadow-xl duration-200 animate-in slide-in-from-left">
+        <div className="flex h-12 shrink-0 items-center border-b border-border px-3">
+          <Brand />
+        </div>
+        <nav className="flex-1 space-y-1 p-2">
+          {nav.map((n) => (
             <button
               key={n.id}
               type="button"
               onClick={() => onSelect(n.id)}
-              title={collapsed ? n.label : undefined}
               className={cn(
-                "flex w-full items-center rounded-md py-2 text-xs transition-colors",
-                collapsed ? "justify-center px-0" : "gap-2.5 px-3",
+                "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-xs transition-colors",
                 view === n.id
                   ? "bg-secondary font-medium text-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >
               {n.icon}
-              {!collapsed && n.label}
+              {n.label}
             </button>
           ))}
-      </nav>
-
-      <div
-        className={cn("space-y-2 border-t border-border", collapsed ? "p-2" : "p-3")}
-      >
-        {!collapsed && (
+        </nav>
+        <div className="space-y-2 border-t border-border p-3">
           <div className="px-1">
-            <div className="truncate text-xs font-medium">
-              {user.displayName}
-            </div>
+            <div className="truncate text-xs font-medium">{user.displayName}</div>
             <div className="text-[11px] capitalize text-muted-foreground">
               {user.role}
             </div>
           </div>
-        )}
-        <div className={cn("flex gap-1", collapsed && "flex-col")}>
           <Button
             size="sm"
             variant="ghost"
-            className={cn(collapsed ? "justify-center px-0" : "flex-1 justify-start")}
-            onClick={onToggleTheme}
-            title="Toggle theme"
-          >
-            {dark ? <Sun /> : <Moon />}
-            {!collapsed && "Theme"}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className={cn(collapsed ? "justify-center px-0" : "flex-1 justify-start")}
+            className="w-full justify-start"
             onClick={onLogout}
-            title="Log out"
           >
             <LogOut />
-            {!collapsed && "Logout"}
+            Logout
           </Button>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </div>
   );
 }
 
