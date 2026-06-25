@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useToast } from "@/components/ui/toast";
 import { listUsers, setUserActive } from "@/lib/authApi";
 
 export function AdminPage() {
@@ -22,6 +23,7 @@ export function AdminPage() {
 }
 
 function UsersCard() {
+  const toast = useToast();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +47,11 @@ function UsersCard() {
     try {
       await setUserActive(u.id, active);
       await refresh();
+      toast.success(
+        `${u.displayName} ${active ? "activated" : "deactivated"}.`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setPendingId(null);
     }

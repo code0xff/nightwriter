@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { IdCard, KeyRound, Loader2 } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,10 +10,9 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/toast";
 import { changePassword, updateDisplayName } from "@/lib/authApi";
 import { useAuth } from "@/lib/authContext";
-
-type Msg = { ok: boolean; text: string } | null;
 
 export function AccountPage() {
   const { user } = useAuth();
@@ -29,9 +27,9 @@ export function AccountPage() {
 
 function DisplayNameCard() {
   const { user, updateUser } = useAuth();
+  const toast = useToast();
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<Msg>(null);
 
   const current = user?.displayName ?? "";
   const trimmed = displayName.trim();
@@ -39,14 +37,13 @@ function DisplayNameCard() {
 
   const go = async () => {
     setBusy(true);
-    setMsg(null);
     try {
       const updated = await updateDisplayName(trimmed);
       updateUser(updated);
       setDisplayName(updated.displayName);
-      setMsg({ ok: true, text: "Display name updated." });
+      toast.success("Display name updated.");
     } catch (err) {
-      setMsg({ ok: false, text: err instanceof Error ? err.message : String(err) });
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -85,11 +82,6 @@ function DisplayNameCard() {
               Update display name
             </Button>
           </div>
-          {msg && (
-            <Alert variant={msg.ok ? "success" : "destructive"}>
-              <AlertDescription>{msg.text}</AlertDescription>
-            </Alert>
-          )}
         </form>
       </CardContent>
     </Card>
@@ -97,21 +89,20 @@ function DisplayNameCard() {
 }
 
 function PasswordCard() {
+  const toast = useToast();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<Msg>(null);
 
   const go = async () => {
     setBusy(true);
-    setMsg(null);
     try {
       await changePassword(current, next);
-      setMsg({ ok: true, text: "Password updated." });
+      toast.success("Password updated.");
       setCurrent("");
       setNext("");
     } catch (err) {
-      setMsg({ ok: false, text: err instanceof Error ? err.message : String(err) });
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -159,11 +150,6 @@ function PasswordCard() {
               Update password
             </Button>
           </div>
-          {msg && (
-            <Alert variant={msg.ok ? "success" : "destructive"}>
-              <AlertDescription>{msg.text}</AlertDescription>
-            </Alert>
-          )}
         </form>
       </CardContent>
     </Card>

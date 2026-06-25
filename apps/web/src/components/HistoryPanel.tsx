@@ -20,6 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import {
   deleteHistory,
   getHistoryItem,
@@ -59,6 +60,7 @@ function HistoryList({
   onOpen: (id: string) => void;
   onDeleted: () => void;
 }) {
+  const toast = useToast();
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +79,9 @@ function HistoryList({
       await deleteHistory(id);
       setItems((xs) => xs.filter((x) => x.id !== id));
       onDeleted();
+      toast.success("Generation deleted.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setPendingId(null);
     }
@@ -179,6 +184,7 @@ function HistoryDetail({
   onBack: () => void;
   onDeleted: () => void;
 }) {
+  const toast = useToast();
   const [item, setItem] = useState<HistoryItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -194,8 +200,9 @@ function HistoryDetail({
     try {
       await deleteHistory(id);
       onDeleted();
+      toast.success("Generation deleted.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e));
       setDeleting(false);
     }
   };
