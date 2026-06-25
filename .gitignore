@@ -22,3 +22,4 @@ apps/api/data/
 
 # codex review output
 .codex-review.md
+.claude/scheduled_tasks.lock
