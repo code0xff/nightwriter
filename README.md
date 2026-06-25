@@ -33,7 +33,7 @@ Node ≥ 22.13 (required by pnpm 11) and pnpm.
 ```bash
 pnpm install
 pnpm --filter @nightwriter/shared build   # build shared types once
-pnpm dev                                   # api (:8787) + web (:5173) in parallel
+pnpm dev                                   # api (:8787) + web (:5172) in parallel
 ```
 
 The web dev server proxies `/api` to the API at `http://127.0.0.1:8787`.
@@ -110,7 +110,7 @@ All `/api/generate/*` and `/api/history/*` require a session token
 |-----|---------|-|
 | `PORT` | `8787` | |
 | `HOST` | `127.0.0.1` | bind address; set `0.0.0.0` to expose on the LAN (see note) |
-| `CORS_ORIGIN` | `http://localhost:5173` | restrict who can drive local CLIs |
+| `CORS_ORIGIN` | `http://localhost:5172` | restrict who can drive local CLIs |
 | `NIGHTWRITER_MAX_CONCURRENCY` | `2` | concurrent CLI subprocesses; excess queued |
 | `NIGHTWRITER_JOB_TIMEOUT_MS` | `120000` | per-job subprocess timeout |
 | `NIGHTWRITER_ARTIFACT_TTL_MS` | `1800000` | artifact lifetime before cleanup |
@@ -123,7 +123,7 @@ All `/api/generate/*` and `/api/history/*` require a session token
 | `NIGHTWRITER_SESSION_SECRET` | _generated+persisted_ | HMAC secret for session tokens |
 | `NIGHTWRITER_SESSION_TTL_MS` | `604800000` | session lifetime (7d) |
 | `NIGHTWRITER_RP_ID` / `NIGHTWRITER_RP_NAME` | `localhost` / `Nightwriter` | WebAuthn relying party (passkeys) |
-| `NIGHTWRITER_ORIGIN` | `http://localhost:5173` | allowed passkey origins (host must match RP ID) |
+| `NIGHTWRITER_ORIGIN` | `http://localhost:5172` | allowed passkey origins (host must match RP ID) |
 
 ## Security notes
 
@@ -146,7 +146,7 @@ HOST=0.0.0.0 pnpm --filter @nightwriter/api dev
 pnpm --filter @nightwriter/web exec vite --host 0.0.0.0
 ```
 
-Then open `http://<this-host-ip>:5173`. Username/password login works over a LAN
+Then open `http://<this-host-ip>:5172`. Username/password login works over a LAN
 IP (the web server proxies `/api`). **Passkeys only work on `localhost` over HTTP**
 — WebAuthn needs a secure context and the page host must match `NIGHTWRITER_RP_ID`;
 for remote passkeys serve over HTTPS with a real hostname and set

@@ -63,7 +63,7 @@ export function loadConfig(): AppConfig {
     // Restrict to the local web origin by default; a malicious site must not
     // be able to drive the user's authenticated local CLIs. Override for
     // custom deployments via CORS_ORIGIN.
-    corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
+    corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5172",
     // Clamp to >= 1 so a bad value can't permanently stall the queue.
     maxConcurrency: Math.max(1, envInt("NIGHTWRITER_MAX_CONCURRENCY", 2)),
     jobTimeoutMs: Math.max(1_000, envInt("NIGHTWRITER_JOB_TIMEOUT_MS", 120_000)),
@@ -98,7 +98,7 @@ export function loadConfig(): AppConfig {
       rpName: process.env.NIGHTWRITER_RP_NAME ?? "Nightwriter",
       rpID: process.env.NIGHTWRITER_RP_ID ?? "localhost",
       // Origin host must match rpID (default "localhost"); 127.0.0.1 would not.
-      origins: (process.env.NIGHTWRITER_ORIGIN ?? "http://localhost:5173")
+      origins: (process.env.NIGHTWRITER_ORIGIN ?? "http://localhost:5172")
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean),

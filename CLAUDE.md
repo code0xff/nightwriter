@@ -92,7 +92,7 @@ for several runtimes (Claude / Codex / OpenClaw / Hermes / ADK).
 ```bash
 pnpm install
 pnpm --filter @nightwriter/shared build   # build shared types once (required)
-pnpm dev                                   # api :8787 + web :5173
+pnpm dev                                   # api :8787 + web :5172
 pnpm --filter @nightwriter/api test        # vitest (uses fake-cli fixture)
 pnpm verify                                # full CI-equivalent gate locally
 ```
