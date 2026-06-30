@@ -139,6 +139,7 @@ function Register() {
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState<"password" | "passkey" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -169,6 +170,9 @@ function Register() {
     );
 
   const usernameOk = username.trim().length >= 3;
+  const passwordOk = password.length >= 8;
+  const passwordsMatch = password === confirmPassword;
+  const showMismatch = confirmPassword.length > 0 && !passwordsMatch;
 
   return (
     <div className="space-y-3">
@@ -182,7 +186,11 @@ function Register() {
         <Field id="reg-username" label="Username" value={username} onChange={setUsername} placeholder="jane" autoComplete="username" />
         <Field id="reg-display" label="Display name (optional)" value={displayName} onChange={setDisplayName} placeholder="Jane Doe" />
         <Field id="reg-password" label="Password (min 8 chars)" type="password" value={password} onChange={setPassword} autoComplete="new-password" />
-        <Button className="w-full" type="submit" disabled={!!busy || !usernameOk || password.length < 8}>
+        <Field id="reg-confirm" label="Confirm password" type="password" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
+        {showMismatch && (
+          <p className="text-[11px] text-destructive">Passwords do not match.</p>
+        )}
+        <Button className="w-full" type="submit" disabled={!!busy || !usernameOk || !passwordOk || !passwordsMatch}>
           {busy === "password" ? <Loader2 className="animate-spin" /> : <UserPlus />}
           Create account
         </Button>
