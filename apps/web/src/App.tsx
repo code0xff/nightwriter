@@ -1,24 +1,14 @@
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
-  FileClock,
   LogOut,
   Menu,
   Moon,
   PackageOpen,
   PenLine,
   Radio,
-  Settings,
   ShieldCheck,
-  Sparkles,
   Sun,
-  Users,
 } from "lucide-react";
 import type {
   DoneEvent,
@@ -36,6 +26,7 @@ import { HistoryPanel } from "@/components/HistoryPanel";
 import { LoginScreen } from "@/components/LoginScreen";
 import { PromptForm } from "@/components/PromptForm";
 import { RunView } from "@/components/RunView";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { cancelJob, startGeneration, streamJob } from "@/lib/api";
 import { useAuth } from "@/lib/authContext";
@@ -107,7 +98,6 @@ function BackgroundGlow() {
 interface NavItem {
   id: View;
   label: string;
-  icon: ReactNode;
   show: boolean;
 }
 
@@ -132,10 +122,10 @@ function Shell(props: {
 
   const nav: NavItem[] = user
     ? ([
-        { id: "generate", label: "Generate", icon: <Sparkles className="size-4" />, show: true },
-        { id: "history", label: "History", icon: <FileClock className="size-4" />, show: true },
-        { id: "account", label: "Account", icon: <Settings className="size-4" />, show: true },
-        { id: "admin", label: "Admin", icon: <Users className="size-4" />, show: user.role === "admin" },
+        { id: "generate", label: "Generate", show: true },
+        { id: "history", label: "History", show: true },
+        { id: "account", label: "Account", show: true },
+        { id: "admin", label: "Admin", show: user.role === "admin" },
       ] as NavItem[]).filter((n) => n.show)
     : [];
 
@@ -226,13 +216,12 @@ function Header(props: {
                 type="button"
                 onClick={() => onSelect(n.id)}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors",
+                  "rounded-md px-2.5 py-1.5 text-xs transition-colors",
                   view === n.id
                     ? "bg-secondary font-medium text-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 )}
               >
-                {n.icon}
                 {n.label}
               </button>
             ))}
@@ -351,13 +340,12 @@ function MobileDrawer(props: {
               type="button"
               onClick={() => onSelect(n.id)}
               className={cn(
-                "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-xs transition-colors",
+                "w-full rounded-md px-3 py-2 text-left text-xs transition-colors",
                 view === n.id
                   ? "bg-secondary font-medium text-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >
-              {n.icon}
               {n.label}
             </button>
           ))}
@@ -385,50 +373,52 @@ function MobileDrawer(props: {
 }
 
 function Generator() {
+  const toast = useToast();
   const [run, setRun] = useState<RunState | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const closeRef = useRef<(() => void) | null>(null);
 
-  const handleSubmit = useCallback(async (req: GenerateRequest) => {
-    setSubmitError(null);
-    try {
-      const { jobId } = await startGeneration(req);
-      setRun({ jobId, state: "queued", stage: "queued", logs: [] });
-      closeRef.current = streamJob(jobId, {
-        onStatus: (e) =>
-          setRun((r) => (r ? { ...r, state: e.state, stage: e.stage } : r)),
-        onLog: (e) => setRun((r) => (r ? { ...r, logs: [...r.logs, e] } : r)),
-        onDone: (e) =>
-          setRun((r) =>
-            r ? { ...r, done: e, state: "succeeded", stage: "ready" } : r,
-          ),
-        onError: (e) =>
-          setRun((r) =>
-            r
-              ? {
-                  ...r,
-                  error: e,
-                  state: e.code === "canceled" ? "canceled" : "failed",
-                  stage: "error",
-                }
-              : r,
-          ),
-        onConnectionError: () =>
-          setRun((r) =>
-            r && r.state !== "succeeded"
-              ? {
-                  ...r,
-                  error: { code: "internal", message: "Lost connection." },
-                  state: "failed",
-                  stage: "error",
-                }
-              : r,
-          ),
-      });
-    } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : String(err));
-    }
-  }, []);
+  const handleSubmit = useCallback(
+    async (req: GenerateRequest) => {
+      try {
+        const { jobId } = await startGeneration(req);
+        setRun({ jobId, state: "queued", stage: "queued", logs: [] });
+        closeRef.current = streamJob(jobId, {
+          onStatus: (e) =>
+            setRun((r) => (r ? { ...r, state: e.state, stage: e.stage } : r)),
+          onLog: (e) => setRun((r) => (r ? { ...r, logs: [...r.logs, e] } : r)),
+          onDone: (e) =>
+            setRun((r) =>
+              r ? { ...r, done: e, state: "succeeded", stage: "ready" } : r,
+            ),
+          onError: (e) =>
+            setRun((r) =>
+              r
+                ? {
+                    ...r,
+                    error: e,
+                    state: e.code === "canceled" ? "canceled" : "failed",
+                    stage: "error",
+                  }
+                : r,
+            ),
+          onConnectionError: () =>
+            setRun((r) =>
+              r && r.state !== "succeeded"
+                ? {
+                    ...r,
+                    error: { code: "internal", message: "Lost connection." },
+                    state: "failed",
+                    stage: "error",
+                  }
+                : r,
+            ),
+        });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [toast],
+  );
 
   const handleCancel = useCallback(() => {
     if (run) void cancelJob(run.jobId);
@@ -438,7 +428,6 @@ function Generator() {
     closeRef.current?.();
     closeRef.current = null;
     setRun(null);
-    setSubmitError(null);
   }, []);
 
   if (run)
@@ -459,7 +448,6 @@ function Generator() {
     <div className="space-y-4">
       <Hero />
       <PromptForm disabled={false} onSubmit={handleSubmit} />
-      {submitError && <p className="text-xs text-destructive">{submitError}</p>}
     </div>
   );
 }
