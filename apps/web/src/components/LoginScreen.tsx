@@ -183,8 +183,8 @@ function Register() {
           void run("password");
         }}
       >
-        <Field id="reg-username" label="Username" value={username} onChange={setUsername} placeholder="jane" autoComplete="username" />
-        <Field id="reg-display" label="Display name (optional)" value={displayName} onChange={setDisplayName} placeholder="Jane Doe" />
+        <Field id="reg-username" label="Username" value={username} onChange={setUsername} autoComplete="username" />
+        <Field id="reg-display" label="Display name (optional)" value={displayName} onChange={setDisplayName} />
         <Field id="reg-password" label="Password (min 8 chars)" type="password" value={password} onChange={setPassword} autoComplete="new-password" />
         <Field id="reg-confirm" label="Confirm password" type="password" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
         {showMismatch && (
