@@ -3,12 +3,56 @@
 // from stdin and prints a deterministic agent definition. If invoked with
 // "stream-json" in argv (the claude adapter), it emits the streaming-JSON event
 // format; otherwise it prints plain text (the codex adapter / fallback).
+//
+// When invoked with "--agent" (the claude CHAT runtime), it instead behaves as
+// a conversational agent: it records each user message to a per-session log in
+// the cwd and streams a deterministic reply that recalls the first message —
+// exercising session resume + the stable per-chat workdir.
+import { appendFileSync, readFileSync, existsSync } from "node:fs";
+import path from "node:path";
+
 let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (d) => {
   input += d;
 });
+
+function argValue(flag) {
+  const i = process.argv.indexOf(flag);
+  return i >= 0 ? process.argv[i + 1] : undefined;
+}
+
+function runChat(message) {
+  const sessionId = argValue("--session-id") ?? argValue("--resume") ?? "s";
+  const logFile = path.join(process.cwd(), `chat-${sessionId}.log`);
+  const prior = existsSync(logFile)
+    ? readFileSync(logFile, "utf8").split("\n").filter(Boolean)
+    : [];
+  const reply =
+    prior.length === 0
+      ? `Ack: ${message.trim()}`
+      : `Recall(${prior[0]}) | now: ${message.trim()}`;
+  appendFileSync(logFile, message.trim() + "\n");
+
+  const emit = (o) => process.stdout.write(JSON.stringify(o) + "\n");
+  emit({ type: "system", subtype: "init", session_id: sessionId, model: "fake-model" });
+  emit({
+    type: "stream_event",
+    event: { type: "content_block_delta", delta: { type: "text_delta", text: reply.slice(0, 5) } },
+  });
+  emit({
+    type: "stream_event",
+    event: { type: "content_block_delta", delta: { type: "text_delta", text: reply.slice(5) } },
+  });
+  emit({ type: "result", subtype: "success", is_error: false, result: reply });
+  process.exit(0);
+}
+
 process.stdin.on("end", () => {
+  if (process.argv.includes("--agent")) {
+    runChat(input);
+    return;
+  }
   process.stderr.write("thinking...\n");
   const md = [
     "```markdown",
