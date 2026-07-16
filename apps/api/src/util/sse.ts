@@ -1,5 +1,5 @@
 import type { ServerResponse } from "node:http";
-import type { SseEventName } from "@nightwriter/shared";
+import type { ChatSseEventName, SseEventName } from "@nightwriter/shared";
 
 /**
  * Minimal SSE writer over a raw Node response.
@@ -31,7 +31,7 @@ export class SseChannel {
     return this.closed;
   }
 
-  send(event: SseEventName, data: unknown, id?: string): void {
+  send(event: SseEventName | ChatSseEventName, data: unknown, id?: string): void {
     if (this.closed) return;
     let frame = "";
     if (id) frame += `id: ${id}\n`;

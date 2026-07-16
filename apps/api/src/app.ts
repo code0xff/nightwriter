@@ -3,6 +3,8 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { createAdapterRegistry } from "./adapters/index.js";
 import { AuthService } from "./auth/service.js";
 import { makeGuards } from "./auth/guards.js";
+import { ChatStore } from "./chat/store.js";
+import { createRuntimeRegistry } from "./chat/runtimes/index.js";
 import { type AppConfig, loadConfig } from "./config.js";
 import { type Database, openDatabase } from "./db/index.js";
 import { createRunner } from "./generate/runner.js";
@@ -11,12 +13,14 @@ import { JobStore } from "./jobs/store.js";
 import { registerAccountRoutes } from "./routes/account.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerAuthRoutes } from "./routes/auth.js";
+import { registerChatRoutes } from "./routes/chat.js";
 import { registerGenerateRoutes } from "./routes/generate.js";
 import { registerHistoryRoutes } from "./routes/history.js";
 
 export interface BuiltApp {
   app: FastifyInstance;
   store: JobStore;
+  chatStore: ChatStore;
   auth: AuthService;
   history: HistoryStore;
   db: Database;
@@ -54,17 +58,23 @@ export async function buildApp(
   });
   store.start();
 
+  const runtimes = createRuntimeRegistry(config);
+  const chatStore = new ChatStore(config, db.chats, db.history, runtimes);
+  chatStore.start();
+
   app.get("/health", async () => ({ ok: true }));
   registerAuthRoutes(app, auth, guards);
   registerAccountRoutes(app, auth, guards);
   registerAdminRoutes(app, auth, guards);
   registerGenerateRoutes(app, store, guards);
   registerHistoryRoutes(app, history, guards);
+  registerChatRoutes(app, chatStore, guards);
 
   app.addHook("onClose", async () => {
     await store.stop();
+    await chatStore.stop();
     await db.close();
   });
 
-  return { app, store, auth, history, db, config };
+  return { app, store, chatStore, auth, history, db, config };
 }
