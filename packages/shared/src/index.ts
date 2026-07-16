@@ -240,3 +240,110 @@ export interface HistoryListResponse {
 export interface HistoryItemResponse {
   item: HistoryItem;
 }
+
+/* ------------------------------------------------------------------ *
+ * Chat — interactive multi-turn conversation with a generated agent.
+ * The agent definition (from a history item) is run on its native
+ * runtime CLI (claude/codex) via short-lived, session-resumed turns.
+ * ------------------------------------------------------------------ */
+
+export type ChatRole = "user" | "assistant";
+
+export interface ChatMessage {
+  id: string;
+  role: ChatRole;
+  content: string;
+  createdAt: number;
+}
+
+/** A conversation seeded from a generated agent, owned by its creator. */
+export interface ChatSession {
+  id: string;
+  ownerId: string;
+  /** Source generation (history item) the agent definition came from. */
+  historyId?: string;
+  /** Display title (derived from the source prompt/slug). */
+  title: string;
+  /** Runtime the agent is chatted on (mirrors the generation target). */
+  target: Target;
+  /** CLI driving the conversation (claude/codex). */
+  runtime: GeneratorCli;
+  model: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A session plus its full message history (detail endpoint). */
+export type ChatSessionDetail = ChatSession & { messages: ChatMessage[] };
+
+/** POST /api/chat — start a chat from a generated agent. */
+export interface CreateChatRequest {
+  historyId: string;
+}
+export interface CreateChatResponse {
+  chatId: string;
+}
+
+/** POST /api/chat/:id/messages — send a user turn. */
+export interface SendMessageRequest {
+  content: string;
+}
+export interface SendMessageResponse {
+  /** Identifier for the assistant turn this message kicked off. */
+  turnId: string;
+}
+
+export interface ChatListResponse {
+  sessions: ChatSession[];
+}
+export interface ChatDetailResponse {
+  session: ChatSessionDetail;
+}
+
+/* ---- Chat SSE event payloads — GET /api/chat/:id/events ---- */
+
+/** A streamed chunk of the assistant's in-progress reply. */
+export interface ChatDeltaEvent {
+  turnId: string;
+  text: string;
+}
+/** A completed message (assistant final, or the echoed user message). */
+export interface ChatMessageEvent {
+  turnId: string;
+  message: ChatMessage;
+}
+/** The assistant turn finished successfully. */
+export interface ChatDoneEvent {
+  turnId: string;
+}
+/** The assistant turn failed. */
+export interface ChatErrorEvent {
+  turnId: string;
+  code: GenerateErrorCode;
+  message: string;
+}
+
+/** Discriminated union mirroring the chat SSE `event:` names. */
+export type ChatSseEvent =
+  | { event: "delta"; data: ChatDeltaEvent }
+  | { event: "message"; data: ChatMessageEvent }
+  | { event: "done"; data: ChatDoneEvent }
+  | { event: "error"; data: ChatErrorEvent };
+
+export const CHAT_SSE_EVENT_NAMES = [
+  "delta",
+  "message",
+  "done",
+  "error",
+] as const;
+export type ChatSseEventName = (typeof CHAT_SSE_EVENT_NAMES)[number];
+
+/* ---- Runtime capabilities — which targets can be chatted on ---- */
+
+/** Whether each target's native runtime is available on the server. */
+export type RuntimeCapabilities = Record<Target, boolean>;
+
+/** GET /api/chat/capabilities — drives the "Chat" button gating. */
+export interface CapabilitiesResponse {
+  runtimes: RuntimeCapabilities;
+}
