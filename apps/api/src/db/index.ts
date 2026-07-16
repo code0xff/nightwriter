@@ -3,6 +3,9 @@ import { SqliteDatabase } from "./sqlite.js";
 import type { Database } from "./types.js";
 
 export type {
+  ChatMessageRecord,
+  ChatRecord,
+  ChatRepository,
   Database,
   HistoryRepository,
   PasskeyCredential,

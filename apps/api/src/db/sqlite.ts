@@ -3,6 +3,9 @@ import { mkdirSync } from "node:fs";
 import Database from "better-sqlite3";
 import type { HistoryItem } from "@nightwriter/shared";
 import type {
+  ChatMessageRecord,
+  ChatRecord,
+  ChatRepository,
   Database as Db,
   HistoryRepository,
   PasskeyCredential,
@@ -47,6 +50,35 @@ CREATE TABLE settings (
 );
 `;
 
+// v3: interactive chat sessions with a generated agent + their messages.
+const SCHEMA_V3 = `
+CREATE TABLE chats (
+  id                 TEXT PRIMARY KEY,
+  owner_id           TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  history_id         TEXT,
+  title              TEXT NOT NULL,
+  target             TEXT NOT NULL,
+  runtime            TEXT NOT NULL,
+  model              TEXT NOT NULL,
+  slug               TEXT NOT NULL,
+  definition         TEXT NOT NULL,
+  definition_file    TEXT NOT NULL,
+  runtime_session_id TEXT,
+  created_at         INTEGER NOT NULL,
+  updated_at         INTEGER NOT NULL
+);
+CREATE INDEX idx_chats_owner ON chats(owner_id, updated_at DESC);
+CREATE TABLE chat_messages (
+  id         TEXT PRIMARY KEY,
+  chat_id    TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  role       TEXT NOT NULL,
+  content    TEXT NOT NULL,
+  seq        INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX idx_chat_messages_chat ON chat_messages(chat_id, seq);
+`;
+
 type DB = Database.Database;
 
 interface UserRow {
@@ -78,6 +110,29 @@ interface HistoryRow {
   definition: string | null;
   definition_file: string | null;
 }
+interface ChatRow {
+  id: string;
+  owner_id: string;
+  history_id: string | null;
+  title: string;
+  target: string;
+  runtime: string;
+  model: string;
+  slug: string;
+  definition: string;
+  definition_file: string;
+  runtime_session_id: string | null;
+  created_at: number;
+  updated_at: number;
+}
+interface ChatMessageRow {
+  id: string;
+  chat_id: string;
+  role: string;
+  content: string;
+  seq: number;
+  created_at: number;
+}
 
 function migrate(db: DB): void {
   db.pragma("journal_mode = WAL");
@@ -96,6 +151,12 @@ function migrate(db: DB): void {
          ALTER TABLE history ADD COLUMN definition_file TEXT;`,
       );
       db.pragma("user_version = 2");
+    })();
+  }
+  if (version < 3) {
+    db.transaction(() => {
+      db.exec(SCHEMA_V3);
+      db.pragma("user_version = 3");
     })();
   }
 }
@@ -328,15 +389,131 @@ class SqliteSettings implements SettingsRepository {
   }
 }
 
+class SqliteChats implements ChatRepository {
+  constructor(private readonly db: DB) {}
+
+  private toRecord(row: ChatRow): ChatRecord {
+    return {
+      id: row.id,
+      ownerId: row.owner_id,
+      historyId: row.history_id ?? undefined,
+      title: row.title,
+      target: row.target as ChatRecord["target"],
+      runtime: row.runtime as ChatRecord["runtime"],
+      model: row.model,
+      slug: row.slug,
+      definition: row.definition,
+      definitionFile: row.definition_file,
+      runtimeSessionId: row.runtime_session_id ?? undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  async createChat(chat: ChatRecord): Promise<void> {
+    this.db
+      .prepare(
+        `INSERT INTO chats (id, owner_id, history_id, title, target, runtime, model, slug, definition, definition_file, runtime_session_id, created_at, updated_at)
+         VALUES (@id, @ownerId, @historyId, @title, @target, @runtime, @model, @slug, @definition, @definitionFile, @runtimeSessionId, @createdAt, @updatedAt)`,
+      )
+      .run({
+        id: chat.id,
+        ownerId: chat.ownerId,
+        historyId: chat.historyId ?? null,
+        title: chat.title,
+        target: chat.target,
+        runtime: chat.runtime,
+        model: chat.model,
+        slug: chat.slug,
+        definition: chat.definition,
+        definitionFile: chat.definitionFile,
+        runtimeSessionId: chat.runtimeSessionId ?? null,
+        createdAt: chat.createdAt,
+        updatedAt: chat.updatedAt,
+      });
+  }
+
+  async getChat(id: string): Promise<ChatRecord | undefined> {
+    const row = this.db.prepare("SELECT * FROM chats WHERE id = ?").get(id) as
+      | ChatRow
+      | undefined;
+    return row ? this.toRecord(row) : undefined;
+  }
+
+  async listByOwner(ownerId: string): Promise<ChatRecord[]> {
+    const rows = this.db
+      .prepare(
+        "SELECT * FROM chats WHERE owner_id = ? ORDER BY updated_at DESC",
+      )
+      .all(ownerId) as ChatRow[];
+    return rows.map((r) => this.toRecord(r));
+  }
+
+  async deleteChat(id: string, ownerId: string): Promise<boolean> {
+    // chat_messages cascade via the FK (foreign_keys pragma is ON).
+    const info = this.db
+      .prepare("DELETE FROM chats WHERE id = ? AND owner_id = ?")
+      .run(id, ownerId);
+    return info.changes > 0;
+  }
+
+  async addMessage(msg: Omit<ChatMessageRecord, "seq">): Promise<void> {
+    const tx = this.db.transaction((m: Omit<ChatMessageRecord, "seq">) => {
+      const { n } = this.db
+        .prepare(
+          "SELECT COALESCE(MAX(seq), 0) + 1 AS n FROM chat_messages WHERE chat_id = ?",
+        )
+        .get(m.chatId) as { n: number };
+      this.db
+        .prepare(
+          `INSERT INTO chat_messages (id, chat_id, role, content, seq, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .run(m.id, m.chatId, m.role, m.content, n, m.createdAt);
+    });
+    tx(msg);
+  }
+
+  async listMessages(chatId: string): Promise<ChatMessageRecord[]> {
+    const rows = this.db
+      .prepare(
+        "SELECT * FROM chat_messages WHERE chat_id = ? ORDER BY seq ASC",
+      )
+      .all(chatId) as ChatMessageRow[];
+    return rows.map((r) => ({
+      id: r.id,
+      chatId: r.chat_id,
+      role: r.role as ChatMessageRecord["role"],
+      content: r.content,
+      seq: r.seq,
+      createdAt: r.created_at,
+    }));
+  }
+
+  async setRuntimeSession(id: string, sessionId: string): Promise<void> {
+    this.db
+      .prepare("UPDATE chats SET runtime_session_id = ? WHERE id = ?")
+      .run(sessionId, id);
+  }
+
+  async touch(id: string, updatedAt: number): Promise<void> {
+    this.db
+      .prepare("UPDATE chats SET updated_at = ? WHERE id = ?")
+      .run(updatedAt, id);
+  }
+}
+
 export class SqliteDatabase implements Db {
   readonly users: UserRepository;
   readonly history: HistoryRepository;
   readonly settings: SettingsRepository;
+  readonly chats: ChatRepository;
 
   private constructor(private readonly db: DB) {
     this.users = new SqliteUsers(db);
     this.history = new SqliteHistory(db);
     this.settings = new SqliteSettings(db);
+    this.chats = new SqliteChats(db);
   }
 
   /** Open (creating dirs/schema as needed). Pass ":memory:" for tests. */

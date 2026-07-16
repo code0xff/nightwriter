@@ -1,4 +1,11 @@
-import type { HistoryItem, Role, UserStatus } from "@nightwriter/shared";
+import type {
+  ChatRole,
+  GeneratorCli,
+  HistoryItem,
+  Role,
+  Target,
+  UserStatus,
+} from "@nightwriter/shared";
 
 /* --------------------------- persistence records -------------------------- */
 
@@ -59,10 +66,58 @@ export interface SettingsRepository {
   set(key: string, value: string): Promise<void>;
 }
 
+/**
+ * A persisted chat session. Carries server-only fields (the agent definition
+ * and the runtime's session id) that the client-facing `ChatSession` omits.
+ */
+export interface ChatRecord {
+  id: string;
+  ownerId: string;
+  historyId?: string;
+  title: string;
+  target: Target;
+  runtime: GeneratorCli;
+  model: string;
+  /** Slug used when installing the agent into the runtime's agents dir. */
+  slug: string;
+  /** The agent definition text driven as the runtime agent. */
+  definition: string;
+  /** Root filename of the definition (e.g. "agent.md"). */
+  definitionFile: string;
+  /** The runtime CLI's own session id, set after the first turn (for resume). */
+  runtimeSessionId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ChatMessageRecord {
+  id: string;
+  chatId: string;
+  role: ChatRole;
+  content: string;
+  /** Monotonic per-chat ordering; assigned by the repository on insert. */
+  seq: number;
+  createdAt: number;
+}
+
+export interface ChatRepository {
+  createChat(chat: ChatRecord): Promise<void>;
+  getChat(id: string): Promise<ChatRecord | undefined>;
+  listByOwner(ownerId: string): Promise<ChatRecord[]>;
+  /** Returns false if missing or not owned by ownerId (cascades messages). */
+  deleteChat(id: string, ownerId: string): Promise<boolean>;
+  /** Append a message; the repository assigns the next seq. */
+  addMessage(msg: Omit<ChatMessageRecord, "seq">): Promise<void>;
+  listMessages(chatId: string): Promise<ChatMessageRecord[]>;
+  setRuntimeSession(id: string, sessionId: string): Promise<void>;
+  touch(id: string, updatedAt: number): Promise<void>;
+}
+
 /** A storage backend bundles the repositories and a shutdown hook. */
 export interface Database {
   readonly users: UserRepository;
   readonly history: HistoryRepository;
   readonly settings: SettingsRepository;
+  readonly chats: ChatRepository;
   close(): Promise<void>;
 }
