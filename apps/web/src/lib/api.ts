@@ -37,6 +37,11 @@ function withToken(url: string): string {
   return `${url}${sep}token=${encodeURIComponent(authToken)}`;
 }
 
+/** Absolute, token-carrying URL for an SSE/download endpoint. */
+export function streamUrl(path: string): string {
+  return withToken(`${BASE}${path}`);
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,

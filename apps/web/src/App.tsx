@@ -18,10 +18,12 @@ import type {
   JobState,
   LogEvent,
   PublicUser,
+  Target,
 } from "@nightwriter/shared";
 import { Button } from "@/components/ui/button";
 import { AccountPage } from "@/components/AccountPage";
 import { AdminPage } from "@/components/AdminPage";
+import { ChatPanel } from "@/components/ChatPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { LoginScreen } from "@/components/LoginScreen";
 import { PromptForm } from "@/components/PromptForm";
@@ -29,14 +31,16 @@ import { RunView } from "@/components/RunView";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { cancelJob, startGeneration, streamJob } from "@/lib/api";
+import { createChat, useCapabilities } from "@/lib/chatApi";
 import { useAuth } from "@/lib/authContext";
 
-type View = "generate" | "history" | "account" | "admin";
+type View = "generate" | "history" | "chat" | "account" | "admin";
 
 interface RunState {
   jobId: string;
   state: JobState;
   stage: JobStage;
+  target: Target;
   logs: LogEvent[];
   done?: DoneEvent;
   error?: GenErrorEvent;
@@ -109,6 +113,7 @@ function Shell(props: {
 }) {
   const { user, dark, onToggleTheme, onLogout } = props;
   const [view, setView] = useState<View>("generate");
+  const [chatTarget, setChatTarget] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Shell now stays mounted across logout/login, so reset transient view state
@@ -117,6 +122,7 @@ function Shell(props: {
   const userId = user?.id ?? null;
   useEffect(() => {
     setView("generate");
+    setChatTarget(null);
     setDrawerOpen(false);
   }, [userId]);
 
@@ -124,13 +130,23 @@ function Shell(props: {
     ? ([
         { id: "generate", label: "Generate", show: true },
         { id: "history", label: "History", show: true },
+        { id: "chat", label: "Chat", show: true },
         { id: "account", label: "Account", show: true },
         { id: "admin", label: "Admin", show: user.role === "admin" },
       ] as NavItem[]).filter((n) => n.show)
     : [];
 
   const select = (v: View) => {
+    // Selecting "Chat" from the nav shows the list; opening a specific chat
+    // goes through openChat (which seeds chatTarget).
+    if (v === "chat") setChatTarget(null);
     setView(v);
+    setDrawerOpen(false);
+  };
+
+  const openChat = (chatId: string) => {
+    setChatTarget(chatId);
+    setView("chat");
     setDrawerOpen(false);
   };
 
@@ -163,8 +179,13 @@ function Shell(props: {
         <BackgroundGlow />
         <div className="container relative z-10 max-w-3xl space-y-5 py-6">
           {!user && <LoginScreen />}
-          {user && view === "generate" && <Generator />}
-          {user && view === "history" && <HistoryPanel />}
+          {user && view === "generate" && <Generator onOpenChat={openChat} />}
+          {user && view === "history" && (
+            <HistoryPanel onOpenChat={openChat} />
+          )}
+          {user && view === "chat" && (
+            <ChatPanel key={chatTarget ?? "list"} initialChatId={chatTarget} />
+          )}
           {user && view === "account" && <AccountPage />}
           {user && view === "admin" && user.role === "admin" && <AdminPage />}
           {user && (
@@ -372,8 +393,9 @@ function MobileDrawer(props: {
   );
 }
 
-function Generator() {
+function Generator({ onOpenChat }: { onOpenChat: (chatId: string) => void }) {
   const toast = useToast();
+  const capabilities = useCapabilities();
   const [run, setRun] = useState<RunState | null>(null);
   const closeRef = useRef<(() => void) | null>(null);
 
@@ -381,7 +403,13 @@ function Generator() {
     async (req: GenerateRequest) => {
       try {
         const { jobId } = await startGeneration(req);
-        setRun({ jobId, state: "queued", stage: "queued", logs: [] });
+        setRun({
+          jobId,
+          state: "queued",
+          stage: "queued",
+          target: req.target,
+          logs: [],
+        });
         closeRef.current = streamJob(jobId, {
           onStatus: (e) =>
             setRun((r) => (r ? { ...r, state: e.state, stage: e.stage } : r)),
@@ -430,6 +458,16 @@ function Generator() {
     setRun(null);
   }, []);
 
+  const handleChat = useCallback(async () => {
+    if (!run) return;
+    try {
+      const { chatId } = await createChat(run.jobId);
+      onOpenChat(chatId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
+  }, [run, onOpenChat, toast]);
+
   if (run)
     return (
       <RunView
@@ -441,6 +479,8 @@ function Generator() {
         error={run.error}
         onCancel={handleCancel}
         onReset={handleReset}
+        onChat={handleChat}
+        chatCapable={capabilities?.[run.target] === true}
       />
     );
 

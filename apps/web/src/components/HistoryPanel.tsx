@@ -6,6 +6,7 @@ import {
   FileClock,
   FileText,
   Loader2,
+  MessagesSquare,
   Trash2,
 } from "lucide-react";
 import type { HistoryItem } from "@nightwriter/shared";
@@ -27,8 +28,13 @@ import {
   historyDownloadUrl,
   listHistory,
 } from "@/lib/api";
+import { createChat, useCapabilities } from "@/lib/chatApi";
 
-export function HistoryPanel() {
+export function HistoryPanel({
+  onOpenChat,
+}: {
+  onOpenChat: (chatId: string) => void;
+}) {
   const [selected, setSelected] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -37,6 +43,7 @@ export function HistoryPanel() {
       <HistoryDetail
         id={selected}
         onBack={() => setSelected(null)}
+        onOpenChat={onOpenChat}
         onDeleted={() => {
           setSelected(null);
           setReloadKey((k) => k + 1);
@@ -179,21 +186,36 @@ function HistoryDetail({
   id,
   onBack,
   onDeleted,
+  onOpenChat,
 }: {
   id: string;
   onBack: () => void;
   onDeleted: () => void;
+  onOpenChat: (chatId: string) => void;
 }) {
   const toast = useToast();
+  const capabilities = useCapabilities();
   const [item, setItem] = useState<HistoryItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [chatting, setChatting] = useState(false);
 
   useEffect(() => {
     getHistoryItem(id)
       .then(setItem)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, [id]);
+
+  const chat = async () => {
+    setChatting(true);
+    try {
+      const { chatId } = await createChat(id);
+      onOpenChat(chatId);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+      setChatting(false);
+    }
+  };
 
   const remove = async () => {
     setDeleting(true);
@@ -217,6 +239,26 @@ function HistoryDetail({
           <CardTitle className="text-sm">Generation detail</CardTitle>
         </div>
         <div className="flex items-center gap-2 self-end sm:self-auto">
+          {item && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={chat}
+              disabled={chatting || capabilities?.[item.target] !== true}
+              title={
+                capabilities?.[item.target]
+                  ? "Start an interactive chat with this agent"
+                  : "This target's runtime is not installed on the server"
+              }
+            >
+              {chatting ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <MessagesSquare />
+              )}
+              Chat
+            </Button>
+          )}
           {item && (
             <Button asChild size="sm">
               <a href={historyDownloadUrl(item.id)} download>

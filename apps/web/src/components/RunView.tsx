@@ -5,6 +5,7 @@ import {
   Download,
   FileText,
   Loader2,
+  MessagesSquare,
   RotateCcw,
   X,
 } from "lucide-react";
@@ -39,10 +40,14 @@ interface Props {
   error?: GenErrorEvent;
   onCancel: () => void;
   onReset: () => void;
+  onChat: () => void;
+  /** Whether this target's runtime is available for an interactive chat. */
+  chatCapable: boolean;
 }
 
 export function RunView(props: Props) {
-  const { jobId, state, stage, logs, done, error, onCancel, onReset } = props;
+  const { jobId, state, stage, logs, done, error, onCancel, onReset, onChat, chatCapable } =
+    props;
   const active = state === "queued" || state === "running";
 
   return (
@@ -96,7 +101,14 @@ export function RunView(props: Props) {
         </Alert>
       )}
 
-      {done && <ResultCard jobId={jobId} done={done} />}
+      {done && (
+        <ResultCard
+          jobId={jobId}
+          done={done}
+          onChat={onChat}
+          chatCapable={chatCapable}
+        />
+      )}
     </div>
   );
 }
@@ -219,7 +231,17 @@ function LogConsole({ logs }: { logs: LogEvent[] }) {
   );
 }
 
-function ResultCard({ jobId, done }: { jobId: string; done: DoneEvent }) {
+function ResultCard({
+  jobId,
+  done,
+  onChat,
+  chatCapable,
+}: {
+  jobId: string;
+  done: DoneEvent;
+  onChat: () => void;
+  chatCapable: boolean;
+}) {
   return (
     <Card className="duration-300 animate-in fade-in slide-in-from-bottom-2">
       <CardHeader className="flex-col items-start gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
@@ -227,12 +249,28 @@ function ResultCard({ jobId, done }: { jobId: string; done: DoneEvent }) {
           <CheckCircle2 className="size-4 text-success" />
           <CardTitle className="text-sm">Artifact ready</CardTitle>
         </div>
-        <Button asChild size="sm" className="w-full sm:w-auto">
-          <a href={downloadUrl(jobId)} download>
-            <Download />
-            Download zip
-          </a>
-        </Button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onChat}
+            disabled={!chatCapable}
+            title={
+              chatCapable
+                ? "Start an interactive chat with this agent"
+                : "This target's runtime is not installed on the server"
+            }
+          >
+            <MessagesSquare />
+            Chat with this agent
+          </Button>
+          <Button asChild size="sm">
+            <a href={downloadUrl(jobId)} download>
+              <Download />
+              Download zip
+            </a>
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         <div>
